@@ -39,8 +39,8 @@ V=${S23T_STATE:-/data/adb/s23tweaks}         # state: choices, logs, backups, au
 mkdir -p $V; L=$V/tweaks.log; R=$V/run
 [ -f $D/module.prop ] && MODULE=1 || MODULE=0
 APPLY_LOCK=/dev/s23tweaks_apply.lock         # /dev is tmpfs: locks never survive a reboot
-STAYS_TILL_REBOOT="airdrop wifi7 battery india callrec vulkan audioeraser hdr2023 colortone tenbit galaxyai settingssearch hideksu cam24fps"
-TWEAK_IDS="airdrop battery features callrec india hotspot6g wifi7 display logvideo vulkan camerahdr hdr2023 audioeraser colortone galaxyai camextras autoframe settingssearch bargein callscreen tenbit hideksu cam24fps"
+STAYS_TILL_REBOOT="airdrop wifi7 battery india callrec vulkan vulkangpu audioeraser hdr2023 colortone tenbit galaxyai settingssearch hideksu cam24fps"
+TWEAK_IDS="airdrop battery features callrec india hotspot6g wifi7 display logvideo vulkan camerahdr hdr2023 audioeraser colortone galaxyai camextras autoframe settingssearch bargein callscreen tenbit hideksu cam24fps perfboost deepdoze debloat extrafeatures extracam vulkangpu"
 GMS_MIN=261125000                            # Play services 26.11, the first with Mosey support
 # Firmware the AirDrop/Wi-Fi 7 kernel modules are checked against (one line each, read by customize.sh).
 # All are One UI 9 build GZIF on GKI kernel 34343818, and their whole Wi-Fi stack (cnss2, mhi, cfg80211,
@@ -1554,6 +1554,8 @@ why_not() {
     callscreen)
       [ "${lcv:-0}" -ge 400000000 ] 2>/dev/null || [ "$(df -k /data | awk 'NR == 2 {print $4}')" -ge 7340032 ] ||
         echo "needs about 7 GB free on the phone for its 3.1 GB download" ;;
+    perfboost) [ -f $PBC ] || echo "this phone has no $PBC" ;;
+    vulkangpu) [ -x /data/adb/ksu/bin/resetprop ] || echo "needs KernelSU's resetprop" ;;
   esac
 }
 # is_on TWEAK: is it in effect right now?
@@ -1582,6 +1584,12 @@ is_on() {
     cam24fps) bound $CAM_APK && bound $CF && grep -q 'name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_24FPS".*supported-mode="[^"]*video' $CF 2>/dev/null ;;
     galaxyai) bound /system/priv-app/SamsungSmartSuggestions/SamsungSmartSuggestions.apk ;;
     hideksu) hideksu_on ;;
+    perfboost) bound $PBC ;;
+    deepdoze) [ -e $V/battery_doze ] ;;
+    debloat) [ -f $V/features_disabled_pkgs ] ;;
+    extrafeatures) bound $FF && grep -q SYSTEM_SUPPORT_ENHANCED_PROCESSING $FF 2>/dev/null ;;
+    extracam) bound $FF && grep -q CAMERA_SUPPORT_AFSENSITIVITY $FF 2>/dev/null ;;
+    vulkangpu) [ "$(getprop ro.zygote.disable_gl_preload)" = 1 ] ;;
     *) return 1 ;;
   esac
 }
@@ -1619,22 +1627,19 @@ apply)
   restart=0
   has airdrop && airdrop_overlays && restart=1
   payload_apply && restart=1   # camerahdr hdr2023 audioeraser colortone galaxyai: before the flag file
-  if has battery; then
-    ff_tags="$ff_tags BATTERY_SUPPORT_BSOH_SETTINGS SETTINGS_ENABLE_EU_BATTERY_REGULATORY BATTERY_SUPPORT_PASS_THROUGH BATTERY_SUPPORT_WIRELESS_NIGHT_MODE BATTERY_SUPPORT_LONGLIFE_FORCE_CUTOFF"
+  has battery && { ff_tags="$ff_tags BATTERY_SUPPORT_BSOH_SETTINGS SETTINGS_ENABLE_EU_BATTERY_REGULATORY"; battery_auth; }
+  has features && ff_tags="$ff_tags SETTINGS_SUPPORT_AUTO_POWER_ON_OFF AUDIO_SUPPORT_VOIP_SOUND_LOUDER"
+  if has perfboost; then perfboost_apply; else perfboost_unbind; fi
+  if has extrafeatures; then
+    ff_tags="$ff_tags BATTERY_SUPPORT_PASS_THROUGH BATTERY_SUPPORT_WIRELESS_NIGHT_MODE BATTERY_SUPPORT_LONGLIFE_FORCE_CUTOFF SYSTEM_SUPPORT_ENHANCED_PROCESSING COMMON_SUPPORT_HIGH_PERFORMANCE_MODE GRAPHICS_SUPPORT_TOUCH_FAST_RESPONSE LCD_SUPPORT_DOZE_AP_SLEEP SYSTEM_SUPPORT_LOW_HEAT_MODE MMFW_SUPPORT_PHOTOHDR MMFW_SUPPORT_SUPER_HDR_PLZ MMFW_SUPPORT_AI_UPSCALER"
     ff_set SYSTEM_CONFIG_HCM_AI_POWER_SAVING_LEVEL 225
     ff_set COMMON_CONFIG_CMH_SIOP_LEVEL 2
-    battery_auth
-    perfboost_apply
-  else
-    perfboost_unbind
-  fi
-  if has features; then
-    ff_tags="$ff_tags SETTINGS_SUPPORT_AUTO_POWER_ON_OFF AUDIO_SUPPORT_VOIP_SOUND_LOUDER SYSTEM_SUPPORT_ENHANCED_PROCESSING COMMON_SUPPORT_HIGH_PERFORMANCE_MODE GRAPHICS_SUPPORT_TOUCH_FAST_RESPONSE LCD_SUPPORT_DOZE_AP_SLEEP SYSTEM_SUPPORT_LOW_HEAT_MODE MMFW_SUPPORT_PHOTOHDR MMFW_SUPPORT_SUPER_HDR_PLZ MMFW_SUPPORT_AI_UPSCALER"
     ff_set CAMERA_DOCUMENTSCAN_SOLUTIONS "AI_DEWARPING,SHADOW_REMOVAL,DEBLUR,OBJECT_REMOVAL,COLOR_ENHANCE,TEXT_REFLECTION_REMOVAL,MOIRE_REMOVAL,DOGEAR_REMOVAL,DEFAULT_COLOR_FILTER,MAGNET"
     ff_set GALLERY_CONFIG_LIVEFOCUS_EFFECT_DUAL_BOKEH "BLUR,EFFECT,BIGBOKEH,PORTRAIT,RELIGHT,REFOCUS,LIGHT360,GENERIC_REFOCUS,GENERIC_REEDIT,LIGHT_MAP"
     ff_set AUDIO_CONFIG_SOUNDALIVE_VERSION "eq_custom,uhq_onoff,karaoke,adapt,spk_stereo,dvfs_20_percent,dolby_game_spk_off,dvfs_max_45_percent,voice_boost"
     ff_set AUDIO_CONFIG_EFFECTS_VIDEOCALL TRUE
     ff_set SAIV_CONFIG_MIDAS "UPSCALE,UPSCALE_PRO,UPSCALE_CAMERA_ZOOM,LOWLIGHT,HDR,DEBLUR,MOIRE,DENOISE_DEBLUR,MULTI_FRAME_DEBLUR,UPSCALE_DEBLUR,PHOTOPOLISH,SHADOW,REFLECTION,UWDC,FLARE,FACERESTORATION"
+    ff_set LCD_CONFIG_AOD_REFRESH_RATE 0
     setprop wifi.supplicant_scan_interval 180 2>/dev/null
     setprop profiler.force_disable_err_rpt 1 2>/dev/null
     setprop profiler.force_disable_ulog 1 2>/dev/null
@@ -1644,7 +1649,6 @@ apply)
     # control (the slider writes to a missing /sys/class/mdnie/mdnie/vividness), and VIVIDPLUS 1 makes
     # Vivid screen mode put SurfaceFlinger in sRGB instead of the panel's wide gamut: washed-out colours.
     ff_set LCD_CONFIG_AOD_FULLSCREEN 1; ff_set LCD_CONFIG_AOD_BRIGHTNESS_ANIMATION 1
-    ff_set LCD_CONFIG_AOD_REFRESH_RATE 0
     # Keep AOD_BRIGHTNESS_ANIMATION: without it the wallpaper on AOD can't be seen on the S23. With it
     # the wallpaper starts bright and dims sharply after a few seconds, to the S23's AOD brightness: the
     # AOD app's light-sensor curve is empty on the S23 (0 nits). aodb_apply adds the S24 Ultra's curve.
@@ -1657,11 +1661,9 @@ apply)
 $CF_LOG"
     loglut_bind
   fi
-  if has camextras; then
-    cf_add="$cf_add
+  has camextras && cf_add="$cf_add
 $CF_HLOCK"
-    ff_tags="$ff_tags CAMERA_SUPPORT_AFSENSITIVITY CAMERA_SUPPORT_AFSMARTTRACKING CAMERA_SUPPORT_AFSPEED CAMERA_SUPPORT_AF_DURING_SLOWMOTION_RECORDING CAMERA_SUPPORT_AUTO_EXPOSURE_LIMIT CAMERA_SUPPORT_VIDEO_SOFTENING CAMERA_SUPPORT_MOTIONPHOTO_AUTO_TRIM_MODE CAMERA_SUPPORT_PORTRAIT_INTELLIGENT_OPTIMIZATION_AI_ISP CAMERA_SUPPORT_CINEMATIC_PORTRAITVIDEO CAMERA_SUPPORT_EDITABLE_PORTRAITVIDEO"
-  fi
+  has extracam && ff_tags="$ff_tags CAMERA_SUPPORT_AFSENSITIVITY CAMERA_SUPPORT_AFSMARTTRACKING CAMERA_SUPPORT_AFSPEED CAMERA_SUPPORT_AF_DURING_SLOWMOTION_RECORDING CAMERA_SUPPORT_AUTO_EXPOSURE_LIMIT CAMERA_SUPPORT_VIDEO_SOFTENING CAMERA_SUPPORT_MOTIONPHOTO_AUTO_TRIM_MODE CAMERA_SUPPORT_PORTRAIT_INTELLIGENT_OPTIMIZATION_AI_ISP CAMERA_SUPPORT_CINEMATIC_PORTRAITVIDEO CAMERA_SUPPORT_EDITABLE_PORTRAITVIDEO"
   has cam24fps && cf_video_modes="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_24FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_24FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_7680X4320_24FPS"
   camfeat_apply && restart=1
   has cam24fps && cam24fps_bind
@@ -1673,7 +1675,8 @@ $CF_HLOCK"
   # Bixby barge-in (untested): talk over Bixby while it answers, as on the S24
   has bargein && ff_set BIXBY_CONFIG_BARGEIN_PARAM_MODE 2
   # Draw apps with Vulkan instead of OpenGL (Samsung's libhwui ignores ro.hwui.use_vulkan)
-  has vulkan && { setprop debug.hwui.renderer skiavk; [ -x /data/adb/ksu/bin/resetprop ] && /data/adb/ksu/bin/resetprop ro.zygote.disable_gl_preload 1; log "vulkan: apps render with Skia on Vulkan (GL preload disabled)"; restart=1; }
+  has vulkan && { setprop debug.hwui.renderer skiavk; log "vulkan: apps render with Skia on Vulkan"; restart=1; }
+  has vulkangpu && { /data/adb/ksu/bin/resetprop ro.zygote.disable_gl_preload 1 && log "vulkangpu: GL preload disabled (ro.zygote.disable_gl_preload=1)"; restart=1; }
   has hideksu && hideksu_apply && restart=1   # patched services.jar: needs a framework restart to load
   ff_apply && restart=1
   if has india; then india_apply && { setprop ctl.restart ril-daemon; log "india: mobile network restarting"; restart=1; }
@@ -1686,8 +1689,8 @@ $CF_HLOCK"
   if has hideksu; then hidemnt_start                                   # after the restart, so it catches the respawned apps
   elif hidemnt_running; then hidemnt_stop; log "hideksu: app mount-hiding stopped (not picked)"; fi
   has hotspot6g && hotspot6g_post
-  if has battery; then battery_doze_on; else battery_doze_off; fi
-  if has features; then features_pkgs_off; else features_pkgs_on; fi
+  if has deepdoze; then battery_doze_on; else battery_doze_off; fi
+  if has debloat; then features_pkgs_off; else features_pkgs_on; fi
   has camextras && directorsview_pref
   has callscreen && callscreen_apply
   has airdrop && airdrop_post

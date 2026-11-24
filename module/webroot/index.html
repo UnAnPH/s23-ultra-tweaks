@@ -356,6 +356,7 @@ const CATS = [
   { id: "ai", name: "Galaxy AI and Samsung apps" },
   { id: "system", name: "Battery and settings" },
   { id: "carrier", name: "Carrier" },
+  { id: "custom", name: "Custom" },
 ];
 const TWEAKS = [
   { id: "airdrop", cat: "connect", name: "AirDrop", desc: "Quick Share → Share with Apple devices (S24 Wi-Fi driver + Google's Mosey; 20 MB download)" },
@@ -381,6 +382,12 @@ const TWEAKS = [
   { id: "hideksu", cat: "system", name: "HideKSU", desc: "Hide the KernelSU root manager from apps, so root-aware apps (CRED, banking) stop crashing. The launcher icon and DFRoot's boot root keep working (patched services.jar; needs the KernelSU manager installed; 12 MB download). Also hides the module's own mounts from the apps you list in /data/adb/s23tweaks/hide-apps.txt, so mount-scanning detectors don't see the tweaks" },
   { id: "callrec", cat: "carrier", name: "Call recording", desc: "Call recording in the Samsung Phone app" },
   { id: "india", cat: "carrier", name: "India carrier config (Airtel, Jio)", desc: "For Indian SIMs: the Indian carrier settings with the Use 5G standalone networks switch, call recording, Smart IVR and message cards, plus Samsung Wallet India (UPI, DigiLocker, transit) and the 6 GHz hotspot — it reports the phone as the Indian model while on (reverts on reboot; the sales code on disk is untouched, adding bank cards may still fail)" },
+  { id: "perfboost", cat: "custom", name: "Disable 2s launch CPU boost", desc: "Surgically disables One UI's 2-second all-core max-clock launch boost (0x00001081) while keeping One UI 9 WALT scheduler and 120 Hz tunings intact" },
+  { id: "deepdoze", cat: "custom", name: "Faster Deep Doze & freezer", desc: "Applies faster Deep Doze timings, enables cached_apps_freezer, and trims parentalcare/hwresourceshare/dbsc from the system Doze whitelist (reversible)" },
+  { id: "debloat", cat: "custom", name: "Suppress telemetry & GOS", desc: "Disables Game Optimizing Service (GOS), DiagMonAgent, DeviceQualityAgent, and Rubin Customization Service (reversible)" },
+  { id: "extrafeatures", cat: "custom", name: "Extra One UI 9 system & audio features", desc: "Adds Enhanced Processing, Pass-Through/Wireless Night Mode, Touch Fast Response, PhotoHDR/SuperHDR/AI Upscaler, SoundAlive voice_boost, and scan/profiler props" },
+  { id: "extracam", cat: "custom", name: "Extra One UI 9 camera AI/AF flags", desc: "Enables AF sensitivity/tracking/speed, slow-mo AF, motion photo auto-trim, and AI ISP/cinematic portrait video floating features" },
+  { id: "vulkangpu", cat: "custom", name: "Vulkan GL preload disable", desc: "Sets ro.zygote.disable_gl_preload=1 as a companion to Vulkan rendering so zygote skips preloading unused OpenGL state" },
 ];
 const NAME = Object.fromEntries(TWEAKS.map(t => [t.id, t.name]));
 const IDS = TWEAKS.map(t => t.id);
@@ -408,6 +415,12 @@ const WHERE = {
   settingssearch: ["Settings search", "Open Settings and tap the search bar."],
   callscreen: ["Call screening", "Phone → Settings → Call screening. On the S23 the AI summary shows an error; screening and voice messages work."],
   bargein: ["Bixby barge-in", "Untested: start talking while Bixby is answering."],
+  perfboost: ["Launch boost disabled", "Nothing to set; perf-hal-2-3 reloaded without the 2s all-core max-clock boost."],
+  deepdoze: ["Faster Deep Doze", "Nothing to set; Deep Doze, cached_apps_freezer, and system Doze whitelist trim are active."],
+  debloat: ["Telemetry & GOS suppressed", "Nothing to set; GOS, DiagMonAgent, DQAgent, and Rubin are disabled until unpicked."],
+  extrafeatures: ["Extra One UI 9 features", "Settings → Device care / Display / Sound quality and effects (voice_boost, Enhanced Processing)."],
+  extracam: ["Extra camera AI/AF flags", "Nothing to set; camera floating features are active after the framework restart."],
+  vulkangpu: ["Vulkan GL preload off", "Nothing to set; active for newly spawned apps after the framework restart."],
 };
 
 const CONFIRM_TEXT = "Wi-Fi and the hotspot drop for ~30 s (AirDrop/Wi-Fi 7), and the screen goes black for ~30 s while Android restarts. This page closes during that; reopen it to see the result.";
