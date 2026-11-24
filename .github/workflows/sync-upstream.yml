@@ -1,0 +1,126 @@
+name: Sync Upstream & Auto-Release Custom
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: custom
+          fetch-depth: 0
+
+      - name: Sync upstream and release if updated
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git remote add upstream https://github.com/dtechterminal/s23-ultra-tweaks.git
+          git fetch upstream main --tags
+
+          # Keep fork main mirroring upstream/main
+          git push origin refs/remotes/upstream/main:refs/heads/main
+
+          UP_VER=$(git show upstream/main:module/module.prop | sed -n 's/^version=//p' | head -n1)
+          UP_CODE=$(git show upstream/main:module/module.prop | sed -n 's/^versionCode=//p' | head -n1)
+          CUR_VER=$(sed -n 's/^version=//p' module/module.prop | head -n1)
+          CUR_BASE="${CUR_VER%%-custom.*}"
+
+          if [ "$UP_VER" = "$CUR_BASE" ] && git merge-base --is-ancestor upstream/main HEAD; then
+            echo "Already on upstream $UP_VER ($CUR_VER); nothing to do."
+            exit 0
+          fi
+
+          # Attempt merge into custom
+          git merge --no-commit --no-ff upstream/main || true
+
+          # Always keep our custom module.prop and update.json, then bump below
+          git checkout --ours module/module.prop module/update.json 2>/dev/null || true
+          git add module/module.prop module/update.json
+
+          CONFLICTS=$(git diff --name-only --diff-filter=U)
+          if [ -n "$CONFLICTS" ]; then
+            git merge --abort
+            TITLE="Manual merge needed for upstream $UP_VER"
+            EXISTING=$(gh issue list --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
+            if [ -z "$EXISTING" ]; then
+              gh issue create --title "$TITLE" --body "$(cat <<EOF
+          Automatic merge from \`dtechterminal/s23-ultra-tweaks:main\` (\`$UP_VER\`) into \`custom\` hit conflicts in:
+
+          \`\`\`
+          $CONFLICTS
+          \`\`\`
+
+          To resolve locally:
+          \`\`\`sh
+          git fetch upstream
+          git checkout main && git merge --ff-only upstream/main && git push origin main
+          git checkout custom && git merge main
+          \`\`\`
+          EOF
+          )"
+            fi
+            echo "Merge conflicts detected; opened issue and aborted."
+            exit 1
+          fi
+
+          if [ "$UP_VER" = "$CUR_BASE" ]; then
+            CUR_N="${CUR_VER##*-custom.}"
+            NEW_N=$((CUR_N + 1))
+          else
+            NEW_N=1
+          fi
+          NEW_VER="${UP_VER}-custom.${NEW_N}"
+          NEW_CODE=$((UP_CODE * 100 + NEW_N))
+
+          sed -i "s/^version=.*/version=${NEW_VER}/" module/module.prop
+          sed -i "s/^versionCode=.*/versionCode=${NEW_CODE}/" module/module.prop
+
+          python3 - "$NEW_VER" "$NEW_CODE" <<'PY'
+          import json, sys
+          ver, code = sys.argv[1], int(sys.argv[2])
+          p = "module/update.json"
+          with open(p) as f:
+              d = json.load(f)
+          d["version"] = ver
+          d["versionCode"] = code
+          d["zipUrl"] = f"https://github.com/UnAnPH/s23-ultra-tweaks/releases/download/{ver}/s23-ultra-tweaks-{ver}.zip"
+          with open(p, "w") as f:
+              json.dump(d, f, indent=2)
+              f.write("\n")
+          PY
+
+          sh -n device/tweaks.sh
+          bash -n install.sh
+          bash module/build.sh
+
+          git add -A
+          git commit -m "merge: upstream $UP_VER -> $NEW_VER"
+          git push origin custom
+
+          git tag "$NEW_VER"
+          git push origin "$NEW_VER"
+
+          if gh release view "$NEW_VER" >/dev/null 2>&1; then
+            gh release upload "$NEW_VER" "out/s23-ultra-tweaks-${NEW_VER}.zip" --clobber
+          else
+            gh release create "$NEW_VER" "out/s23-ultra-tweaks-${NEW_VER}.zip" \
+              --title "$NEW_VER" \
+              --notes "Auto-merged upstream \`$UP_VER\` into custom fork."
+          fi

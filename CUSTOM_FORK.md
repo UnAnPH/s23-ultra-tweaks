@@ -33,6 +33,13 @@ KernelSU compares `versionCode` (integer) to offer in-app updates via `module/up
 
 ## Syncing Future Upstream Releases & Releasing
 
+[`.github/workflows/sync-upstream.yml`](.github/workflows/sync-upstream.yml) checks upstream every 6 hours (and can be triggered manually via **Actions → Sync Upstream & Auto-Release Custom → Run workflow**) to:
+1. Sync `main` with `dtechterminal/s23-ultra-tweaks:main`.
+2. Merge `upstream/main` into `custom`.
+3. Bump `version` (`v<UPSTREAM>-custom.1`) and `versionCode` (`<UPSTREAM_CODE>01`), build the zip, tag, and publish the GitHub Release for KernelSU.
+4. If a real code conflict occurs, abort cleanly and open a GitHub Issue listing the conflicting files.
+
+Manual fallback if needed:
 ```sh
 git fetch origin
 git checkout main && git merge --ff-only origin/main && git push fork main
