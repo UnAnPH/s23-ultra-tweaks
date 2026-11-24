@@ -71,7 +71,7 @@ case " $CAM24_MD5 " in *" ${cam_md5:-none} "*) can_c24=1; why_c24="" ;; esac
 # hideksu goes by the framework file, not the firmware: stock and patched services.jar md5s as in HIDEKSU_JARS (device/tweaks.sh)
 HKS_MD5="30d17f5d60b0d42585b97a94412f6e12 f4c5966939637df194bb465478234fc3 7dc62286f9f0675f84459943cdc397b6 a5449f73103be635f03fb6fdaf9f7d98 c438dd27a76486855d01e74379e13b5d f4918c7454965788ecc0c9003cbea941"
 jar_md5=$(sh_ md5sum /system/framework/services.jar 2>/dev/null | cut -d' ' -f1)
-can_ksu=0; why_ksu="this phone's services.jar isn't one a patch was made from (S918W S918WVLU8GZIF, S918B INS, S918U1)"
+can_ksu=0; why_ksu="this phone's services.jar isn't one a patch was made from (S918W S918WVLU8GZIF, S918B INS/EUX, S918U1)"
 case " $HKS_MD5 " in *" ${jar_md5:-none} "*) can_ksu=1; why_ksu="" ;; esac
 # an Indian SIM (MCC 404/405) makes the carrier picks take the India config instead of plain call recording
 sim=$(sh_ getprop gsm.sim.operator.numeric | cut -d, -f1); sim_india=0; carrier_skip=india

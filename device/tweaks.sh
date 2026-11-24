@@ -1178,6 +1178,71 @@ battery_auth() {
   log "battery: auth IC presented"
 }
 
+# Disable One UI 6.1+'s 2-second all-core max-frequency app-launch boost (0x00001081 Type 10) while
+# keeping all of One UI 9's WALT scheduler and 120 Hz tunings intact. Staged in $R ($V/run, under
+# /data/adb/s23tweaks) so mountinfo contains "s23tweaks" and hidemnt hides it from user-installed apps;
+# restarts perf-hal-2-3 so Qualcomm's Perf HAL reloads the config immediately.
+PBC=/vendor/etc/perf/perfboostsconfig.xml
+perfboost_apply() {
+  [ -f $PBC ] || return 0
+  bound $PBC && { log "battery: app-launch max-clock boost already disabled"; return 0; }
+  grep -q 'Id="0x00001081" Type="10" Enable="true"' $PBC || return 0
+  mkdir -p $R
+  sed 's/Id="0x00001081" Type="10" Enable="true"/Id="0x00001081" Type="10" Enable="false"/' $PBC > $R/perfboostsconfig.xml
+  grep -q 'Id="0x00001081" Type="10" Enable="false"' $R/perfboostsconfig.xml && grep -q '</BoostConfigs>' $R/perfboostsconfig.xml ||
+    { rm -f $R/perfboostsconfig.xml; log "battery: perfboostsconfig edit check failed; skipped"; return 1; }
+  chmod 644 $R/perfboostsconfig.xml; chcon u:object_r:vendor_configs_file:s0 $R/perfboostsconfig.xml
+  mount -o bind,ro $R/perfboostsconfig.xml $PBC || { log "battery: couldn't bind $PBC"; return 1; }
+  setprop ctl.restart perf-hal-2-3 2>/dev/null
+  log "battery: 2s all-core max-clock launch boost (0x00001081) disabled in perf-hal-2-3"
+}
+perfboost_unbind() {
+  bound $PBC || return 0
+  umount $PBC 2>/dev/null && setprop ctl.restart perf-hal-2-3 2>/dev/null &&
+    log "battery: stock perfboostsconfig restored (battery not picked)"
+}
+DOZE_PKGS="com.samsung.android.app.parentalcare com.samsung.android.hwresourceshare com.samsung.android.hwresourceshare.storage com.samsung.android.dbsc"
+battery_doze_on() {
+  settings put global device_idle_constants "inactive_to=300000,sensing_to=0,locating_to=0,location_accuracy=20.0,motion_inactive_to=60000,idle_after_inactive_to=60000,idle_pending_to=60000,max_idle_pending_to=120000,idle_to=1800000,max_idle_to=21600000" >/dev/null 2>&1
+  settings put global cached_apps_freezer enabled >/dev/null 2>&1
+  for pkg in $DOZE_PKGS; do
+    cmd deviceidle sys-whitelist -"$pkg" >/dev/null 2>&1
+  done
+  touch $V/battery_doze
+  log "battery: faster Deep Doze, cached_apps_freezer & system Doze whitelist trim applied"
+}
+battery_doze_off() {
+  [ -e $V/battery_doze ] || return 0
+  settings delete global device_idle_constants >/dev/null 2>&1
+  settings delete global cached_apps_freezer >/dev/null 2>&1
+  cmd deviceidle sys-whitelist reset >/dev/null 2>&1
+  rm -f $V/battery_doze
+  log "battery: Deep Doze, cached_apps_freezer & system Doze whitelist restored (battery not picked)"
+}
+FEAT_PKGS="com.samsung.android.game.gos com.sec.android.diagmonagent com.samsung.android.dqagent com.samsung.android.rubin.app"
+features_pkgs_off() {
+  dis=$(pm list packages -d 2>/dev/null | sed -n 's/^package://p')
+  for pkg in $FEAT_PKGS; do
+    pm path "$pkg" >/dev/null 2>&1 || continue
+    if ! printf '%s\n' "$dis" | grep -qxF "$pkg"; then
+      grep -qxF "$pkg" $V/features_disabled_pkgs 2>/dev/null || echo "$pkg" >> $V/features_disabled_pkgs
+    fi
+    if grep -qxF "$pkg" $V/features_disabled_pkgs 2>/dev/null; then
+      pm disable-user --user 0 "$pkg" >/dev/null 2>&1
+      am force-stop "$pkg" 2>/dev/null
+    fi
+  done
+  log "features: GOS, DiagMonAgent, DeviceQualityAgent & Rubin suppressed"
+}
+features_pkgs_on() {
+  [ -f $V/features_disabled_pkgs ] || return 0
+  while read -r pkg; do
+    [ -n "$pkg" ] && pm enable --user 0 "$pkg" >/dev/null 2>&1
+  done < $V/features_disabled_pkgs
+  rm -f $V/features_disabled_pkgs
+  log "features: re-enabled previously suppressed background packages (features not picked)"
+}
+
 # ---------- CSC (callrec, india): any sales code; the paths come from csc_paths ----------
 # csc_unbind: drop the module's binds so the stock files show again (an apply always starts from stock)
 csc_unbind() {
@@ -1554,13 +1619,32 @@ apply)
   restart=0
   has airdrop && airdrop_overlays && restart=1
   payload_apply && restart=1   # camerahdr hdr2023 audioeraser colortone galaxyai: before the flag file
-  has battery && { ff_tags="$ff_tags BATTERY_SUPPORT_BSOH_SETTINGS SETTINGS_ENABLE_EU_BATTERY_REGULATORY"; battery_auth; }
-  has features && ff_tags="$ff_tags SETTINGS_SUPPORT_AUTO_POWER_ON_OFF AUDIO_SUPPORT_VOIP_SOUND_LOUDER"
+  if has battery; then
+    ff_tags="$ff_tags BATTERY_SUPPORT_BSOH_SETTINGS SETTINGS_ENABLE_EU_BATTERY_REGULATORY BATTERY_SUPPORT_PASS_THROUGH BATTERY_SUPPORT_WIRELESS_NIGHT_MODE BATTERY_SUPPORT_LONGLIFE_FORCE_CUTOFF"
+    ff_set SYSTEM_CONFIG_HCM_AI_POWER_SAVING_LEVEL 225
+    ff_set COMMON_CONFIG_CMH_SIOP_LEVEL 2
+    battery_auth
+    perfboost_apply
+  else
+    perfboost_unbind
+  fi
+  if has features; then
+    ff_tags="$ff_tags SETTINGS_SUPPORT_AUTO_POWER_ON_OFF AUDIO_SUPPORT_VOIP_SOUND_LOUDER SYSTEM_SUPPORT_ENHANCED_PROCESSING COMMON_SUPPORT_HIGH_PERFORMANCE_MODE GRAPHICS_SUPPORT_TOUCH_FAST_RESPONSE LCD_SUPPORT_DOZE_AP_SLEEP SYSTEM_SUPPORT_LOW_HEAT_MODE MMFW_SUPPORT_PHOTOHDR MMFW_SUPPORT_SUPER_HDR_PLZ MMFW_SUPPORT_AI_UPSCALER"
+    ff_set CAMERA_DOCUMENTSCAN_SOLUTIONS "AI_DEWARPING,SHADOW_REMOVAL,DEBLUR,OBJECT_REMOVAL,COLOR_ENHANCE,TEXT_REFLECTION_REMOVAL,MOIRE_REMOVAL,DOGEAR_REMOVAL,DEFAULT_COLOR_FILTER,MAGNET"
+    ff_set GALLERY_CONFIG_LIVEFOCUS_EFFECT_DUAL_BOKEH "BLUR,EFFECT,BIGBOKEH,PORTRAIT,RELIGHT,REFOCUS,LIGHT360,GENERIC_REFOCUS,GENERIC_REEDIT,LIGHT_MAP"
+    ff_set AUDIO_CONFIG_SOUNDALIVE_VERSION "eq_custom,uhq_onoff,karaoke,adapt,spk_stereo,dvfs_20_percent,dolby_game_spk_off,dvfs_max_45_percent,voice_boost"
+    ff_set AUDIO_CONFIG_EFFECTS_VIDEOCALL TRUE
+    ff_set SAIV_CONFIG_MIDAS "UPSCALE,UPSCALE_PRO,UPSCALE_CAMERA_ZOOM,LOWLIGHT,HDR,DEBLUR,MOIRE,DENOISE_DEBLUR,MULTI_FRAME_DEBLUR,UPSCALE_DEBLUR,PHOTOPOLISH,SHADOW,REFLECTION,UWDC,FLARE,FACERESTORATION"
+    setprop wifi.supplicant_scan_interval 180 2>/dev/null
+    setprop profiler.force_disable_err_rpt 1 2>/dev/null
+    setprop profiler.force_disable_ulog 1 2>/dev/null
+  fi
   if has display; then  # the lock screen wallpaper on Always On Display
     # Not LCD_CONFIG_VIVIDNESS / VIVIDPLUS (the S24's Vividness slider): the S23 panel has no vividness
     # control (the slider writes to a missing /sys/class/mdnie/mdnie/vividness), and VIVIDPLUS 1 makes
     # Vivid screen mode put SurfaceFlinger in sRGB instead of the panel's wide gamut: washed-out colours.
     ff_set LCD_CONFIG_AOD_FULLSCREEN 1; ff_set LCD_CONFIG_AOD_BRIGHTNESS_ANIMATION 1
+    ff_set LCD_CONFIG_AOD_REFRESH_RATE 0
     # Keep AOD_BRIGHTNESS_ANIMATION: without it the wallpaper on AOD can't be seen on the S23. With it
     # the wallpaper starts bright and dims sharply after a few seconds, to the S23's AOD brightness: the
     # AOD app's light-sensor curve is empty on the S23 (0 nits). aodb_apply adds the S24 Ultra's curve.
@@ -1573,8 +1657,11 @@ apply)
 $CF_LOG"
     loglut_bind
   fi
-  has camextras && cf_add="$cf_add
+  if has camextras; then
+    cf_add="$cf_add
 $CF_HLOCK"
+    ff_tags="$ff_tags CAMERA_SUPPORT_AFSENSITIVITY CAMERA_SUPPORT_AFSMARTTRACKING CAMERA_SUPPORT_AFSPEED CAMERA_SUPPORT_AF_DURING_SLOWMOTION_RECORDING CAMERA_SUPPORT_AUTO_EXPOSURE_LIMIT CAMERA_SUPPORT_VIDEO_SOFTENING CAMERA_SUPPORT_MOTIONPHOTO_AUTO_TRIM_MODE CAMERA_SUPPORT_PORTRAIT_INTELLIGENT_OPTIMIZATION_AI_ISP CAMERA_SUPPORT_CINEMATIC_PORTRAITVIDEO CAMERA_SUPPORT_EDITABLE_PORTRAITVIDEO"
+  fi
   has cam24fps && cf_video_modes="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_24FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_24FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_7680X4320_24FPS"
   camfeat_apply && restart=1
   has cam24fps && cam24fps_bind
@@ -1586,7 +1673,7 @@ $CF_HLOCK"
   # Bixby barge-in (untested): talk over Bixby while it answers, as on the S24
   has bargein && ff_set BIXBY_CONFIG_BARGEIN_PARAM_MODE 2
   # Draw apps with Vulkan instead of OpenGL (Samsung's libhwui ignores ro.hwui.use_vulkan)
-  has vulkan && { setprop debug.hwui.renderer skiavk; log "vulkan: apps render with Skia on Vulkan"; restart=1; }
+  has vulkan && { setprop debug.hwui.renderer skiavk; [ -x /data/adb/ksu/bin/resetprop ] && /data/adb/ksu/bin/resetprop ro.zygote.disable_gl_preload 1; log "vulkan: apps render with Skia on Vulkan (GL preload disabled)"; restart=1; }
   has hideksu && hideksu_apply && restart=1   # patched services.jar: needs a framework restart to load
   ff_apply && restart=1
   if has india; then india_apply && { setprop ctl.restart ril-daemon; log "india: mobile network restarting"; restart=1; }
@@ -1599,6 +1686,8 @@ $CF_HLOCK"
   if has hideksu; then hidemnt_start                                   # after the restart, so it catches the respawned apps
   elif hidemnt_running; then hidemnt_stop; log "hideksu: app mount-hiding stopped (not picked)"; fi
   has hotspot6g && hotspot6g_post
+  if has battery; then battery_doze_on; else battery_doze_off; fi
+  if has features; then features_pkgs_off; else features_pkgs_on; fi
   has camextras && directorsview_pref
   has callscreen && callscreen_apply
   has airdrop && airdrop_post
@@ -1706,6 +1795,16 @@ cleanup)
   if [ -e $V/india_simprompt ]; then
     pm enable $CIDMGR >/dev/null 2>&1; appops set $CIDMGR SYSTEM_ALERT_WINDOW allow >/dev/null 2>&1
     say "carrier-switch prompt (CID Manager) restored"
+  fi
+  if [ -e $V/battery_doze ]; then
+    settings delete global device_idle_constants >/dev/null 2>&1
+    settings delete global cached_apps_freezer >/dev/null 2>&1
+    cmd deviceidle sys-whitelist reset >/dev/null 2>&1
+    say "Deep Doze and cached_apps_freezer restored"
+  fi
+  if [ -f $V/features_disabled_pkgs ]; then
+    while read -r pkg; do [ -n "$pkg" ] && pm enable --user 0 "$pkg" >/dev/null 2>&1; done < $V/features_disabled_pkgs
+    say "suppressed background packages restored"
   fi
   rm -f /data/adb/service.d/s23tweaks.sh
   cd /; rm -rf $V
