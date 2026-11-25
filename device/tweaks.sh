@@ -665,21 +665,28 @@ stage_text() { tlayer; mkdir -p $T24/new/${1%/*}; cat > $T24/new/$1; }
 # keep_mounts parks each such mount on a spare path first; keep_restore mounts it back on top of the
 # new layer, parents before children, in the order the kernel lists them.
 keep_mounts() {
-  K=$T24/keep; rm -rf $K; mkdir -p $K; i=0
+  K=$T24/keep; rm -rf $K; mkdir -p $K; i=0; : > $T24/keep.ok
   awk -v p="$1/" 'index($2, p) == 1 && $2 !~ /\\/ && !seen[$2]++ {print $2}' /proc/mounts > $T24/keep.list
   while read m; do i=$((i+1))
     if [ -d "$m" ]; then mkdir $K/$i; else : > $K/$i; fi
-    mount --bind "$m" $K/$i || fail "keep $m"
+    if e=$(mount --bind "$m" $K/$i 2>&1); then echo "$i $m" >> $T24/keep.ok; continue; fi
+    case "$m" in
+      # our own edited copies: camfeat_apply and ff_apply rebuild them from stock after the layers
+      # (issue #26: a stale one left by applies of older versions in the same boot couldn't be bound)
+      $FF|$CF) umount "$m" 2>/dev/null
+        log "note: couldn't keep $m inside the new layer (${e:-mount failed}); it's rebuilt later in this apply" ;;
+      *) fail "keep $m: ${e:-mount failed} (a reboot clears it; then apply again)" ;;
+    esac
   done < $T24/keep.list
 }
 keep_restore() {
-  i=0
-  while read m; do i=$((i+1))
-    mount --bind $K/$i "$m" || fail "put back $m"
+  n=0
+  while read i m; do n=$((n+1))
+    e=$(mount --bind $K/$i "$m" 2>&1) || fail "put back $m: ${e:-mount failed}"
     umount $K/$i
-  done < $T24/keep.list
-  [ $i = 0 ] || log "kept $i mounts inside the new layer: $(tr '\n' ' ' < $T24/keep.list)"
-  rm -rf $K $T24/keep.list
+  done < $T24/keep.ok
+  [ $n = 0 ] || log "kept $n mounts inside the new layer: $(cut -d' ' -f2- $T24/keep.ok | tr '\n' ' ')"
+  rm -rf $K $T24/keep.list $T24/keep.ok
 }
 layers_mount() {
   [ -d $T24/new ] || return 1
