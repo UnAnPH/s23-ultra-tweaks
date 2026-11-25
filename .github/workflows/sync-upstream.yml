@@ -25,6 +25,7 @@ jobs:
       - name: Sync upstream and release if updated
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
 
