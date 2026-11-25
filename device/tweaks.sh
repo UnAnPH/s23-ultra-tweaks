@@ -22,7 +22,7 @@
 #         camerahdr hdr2023 audioeraser colortone galaxyai camextras autoframe settingssearch bargein
 #         callscreen tenbit hideksu cam24fps weather wideflash
 #         prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage
-#         anamorphic profps slowmo4k120 dual5g nronly natroam  (see README.md; the categories they're grouped in are in install.sh and the WebUI)
+#         anamorphic profps slowmo4k120 dual5g nronly natroam rambler  (see README.md; the categories they're grouped in are in install.sh and the WebUI)
 #
 # Nothing here writes to a partition. Every change is a module load, an overlay, a bind mount or a
 # runtime setting, so a reboot always returns the phone to stock. The files themselves stay on storage
@@ -32,7 +32,8 @@
 # (harmless without the rest; "unflag" removes them), camextras' camera app setting, callscreen,
 # which installs Samsung Language Core as an ordinary app (undo: pm uninstall <package>), and weather,
 # which installs a 12 KB AI Core stub app and turns Samsung's live wallpaper app back on if it was off,
-# and natroam, which writes a carrier config override file in the Phone app's storage (removed on undo).
+# natroam, which writes a carrier config override file in the Phone app's storage (removed on undo),
+# and rambler, which writes Gboard's local flag override file (the original is put back on undo).
 # dual5g is the one change inside the modem: it edits one policy file in the modem's own storage (EFS),
 # which stays across reboots and module removal until it's put back. The original is backed up before
 # the first write (state folder and Download/s23tweaks-modem-backup); un-picking dual5g, removing the
@@ -48,7 +49,7 @@ mkdir -p $V; L=$V/tweaks.log; R=$V/run
 [ -f $D/module.prop ] && MODULE=1 || MODULE=0
 APPLY_LOCK=/dev/s23tweaks_apply.lock         # /dev is tmpfs: locks never survive a reboot
 STAYS_TILL_REBOOT="airdrop wifi7 battery india callrec vulkan audioeraser hdr2023 colortone tenbit galaxyai settingssearch hideksu cam24fps"
-TWEAK_IDS="airdrop battery features callrec india hotspot6g wifi7 display logvideo vulkan camerahdr hdr2023 audioeraser colortone galaxyai camextras autoframe settingssearch bargein callscreen tenbit hideksu cam24fps weather wideflash prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage anamorphic profps slowmo4k120 dual5g nronly natroam"
+TWEAK_IDS="airdrop battery features callrec india hotspot6g wifi7 display logvideo vulkan camerahdr hdr2023 audioeraser colortone galaxyai camextras autoframe settingssearch bargein callscreen tenbit hideksu cam24fps weather wideflash prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage anamorphic profps slowmo4k120 dual5g nronly natroam rambler"
 GMS_MIN=261125000                            # Play services 26.11, the first with Mosey support
 # Firmware the AirDrop/Wi-Fi 7 kernel modules are checked against (one line each, read by customize.sh).
 # All are One UI 9 build GZIF on GKI kernel 34343818, and their whole Wi-Fi stack (cnss2, mhi, cfg80211,
@@ -615,6 +616,67 @@ loglut_bind() {
   chmod 674 $LS/preloadfilters/* $LS/Thumbnails/*; chcon -R u:object_r:system_file:s0 $LS
   mount --bind $LS $LV || { log "logvideo: couldn't bind the LUT folder"; return 1; }
   log "logvideo: S24 LUTs for Gallery's Log color correction (Edit > LUT)"
+}
+
+# Samsung's low-light video pipeline (Video4kEisVIULL / VideoPreviewVIULL, active at <= 30 fps)
+# has no Log10 tuning on the S23's CamX HAL: in dark scenes it spams IPE metadata errors and crushes
+# the black floor to #000000 instead of keeping Samsung Log's lifted shadows (unlike 48/50/60/120 fps
+# and 8K, which use standard Video4kEIS). Patch IsVIULLEnabled() in com.qti.chi.override.so via a
+# cave at the end of the code segment: when recordingDrMode ([x0, #0xe6ac]) == 5 (Log), return 0
+# before the cache/FPS checks; otherwise run the displaced instruction and continue normally so
+# SDR/HDR10+ video keeps stock VIULL. Found by instructions, not fixed offsets.
+LV_LIB=/vendor/lib64/hw/com.qti.chi.override.so
+LV_CAVE="529cd588 b8686808 7100151f 54000081 52800000 d50323bf d65f03c0 d104c3ff"
+lv_unbind() { while bound $LV_LIB; do umount $LV_LIB || return 1; done; }
+lv_bind() { lv_unbind && mount -o bind,ro $V/logvideo_chi.so $LV_LIB; }
+lv_find() {
+  od -An -v -tx4 -w4 "$1" | awk '
+    $1 == "7100603f" && w[5] == "528ca689" && w[12] == "910343fd" && w[13] == "a90d7bfd" && w[14] == "d104c3ff" && w[15] == "d503233f" {
+      printf "0x%x\n", (NR - 16) * 4
+    }
+    { for (i = 15; i > 1; i--) w[i] = w[i-1]; w[1] = $1 }'
+}
+lv_patch() {
+  F=$1; O=$2; m=$(lv_find $F)
+  [ "$(echo "$m" | grep -c '^0x')" = 1 ] || { echo "its CHI override code differs (IsVIULLEnabled found $(echo "$m" | grep -c '^0x') times)"; return 1; }
+  FN=$((m))
+  ph=$((0x$(tb_rd $F 0x20 8))); n=$((0x$(tb_rd $F 0x38 2))); sz=$((0x$(tb_rd $F 0x36 2))); X=""
+  while [ $n -gt 0 ]; do
+    if [ $((0x$(tb_rd $F $ph 4))) = 1 ] && [ $((0x$(tb_rd $F $((ph + 4)) 4) & 1)) = 1 ]; then
+      X=$((0x$(tb_rd $F $((ph + 8)) 8))); XE=$((X + 0x$(tb_rd $F $((ph + 0x20)) 8))); break; fi
+    ph=$((ph + sz)); n=$((n - 1))
+  done
+  [ -n "$X" ] || { echo "no code segment found"; return 1; }
+  [ $FN -ge $X ] && [ $((FN + 4)) -lt $XE ] || { echo "IsVIULLEnabled falls outside the code segment"; return 1; }
+  K=$(((XE + 3) & ~3)); KE=$((K + 36))
+  [ $KE -le $(((XE + 4095) & ~4095)) ] && [ "$(od -An -v -tx1 -j $K -N 36 $F | tr -s ' ' '\n' | grep -c '^00$')" = 36 ] ||
+    { echo "no free room at the end of its code"; return 1; }
+  cp $F $O || { echo "no room for a copy"; return 1; }
+  tb_wr $O $((FN + 4)) $(tb_b $((FN + 4)) $K)   # sub sp, sp, #0x130 -> b cave (keeps paciasp at FN)
+  o=$K; for x in $LV_CAVE; do tb_wr $O $o 0x$x; o=$((o + 4)); done
+  tb_wr $O $o $(tb_b $o $((FN + 8)))           # back to stp x29, x30, [sp, #0xd0]
+  printf 'IsVIULLEnabled 0x%x, cave 0x%x' $FN $K
+}
+logviull_apply() {
+  [ -f $LV_LIB ] || { log "logvideo: $LV_LIB missing; VIULL Log fix skipped"; return 1; }
+  if bound $LV_LIB; then
+    [ "$(md5 $LV_LIB)" = "$(md5 $V/logvideo_chi.so)" ] && { log "logvideo: low-light Log fix (VIULL bypass) already on"; return 0; }
+    log "logvideo: something else is bound over $LV_LIB; VIULL Log fix skipped"; return 1
+  fi
+  s=$(md5 $LV_LIB)
+  if [ "$(cat $V/logvideo_chi.src 2>/dev/null)" != "$s" ] || [ ! -f $V/logvideo_chi.so ]; then
+    rm -f $V/logvideo_chi.so $V/logvideo_chi.src
+    r=$(lv_patch $LV_LIB $V/logvideo_chi.tmp) || { rm -f $V/logvideo_chi.tmp; log "logvideo: $r; VIULL Log fix skipped"; return 1; }
+    mv $V/logvideo_chi.tmp $V/logvideo_chi.so; echo $s > $V/logvideo_chi.src; log "logvideo: patched CHI override made ($r)"
+  fi
+  chown 0:0 $V/logvideo_chi.so; chmod 644 $V/logvideo_chi.so; chcon u:object_r:vendor_file:s0 $V/logvideo_chi.so
+  if tb_restart lv_bind && bound $LV_LIB; then
+    log "logvideo: low-light Log fix on (VIULL bypassed when recordingDrMode=5)"
+  else
+    tb_restart lv_unbind
+    log "logvideo: with the CHI patch the camera driver didn't stay up; stock driver back"
+    return 1
+  fi
 }
 
 # Director's view (front and back camera at once; the S23 had it in 2023). One UI 9 still ships the
@@ -1623,6 +1685,59 @@ natroam_off() {   # delete our override files; 0 if any was removed
   while read o; do rm -f "$o"; done < $NROAM; rm -f $NROAM
 }
 
+# rambler: Gboard's Rambler voice typing (Gemini dictation that drops filler words and takes spoken edits),
+# which Google turns on only for Pixel 10 and 11. Gboard 18.x has all of it; the server sends
+# enable_agentic_dictation=false and switches off Rambler's toolbar and motion flags elsewhere. Gboard
+# reads its flags in this order: hermetic override, its own local override store (shared_prefs/
+# flag_override.xml, the in-app flag editor's), then the server's values, so a value there wins and stays
+# until Gboard's storage is cleared. The set below is PixelBoard's (github.com/Akshayykadam/PixelBoard,
+# GboardRambler1803StockPolicy), the patched Gboard reported to bring the Pixel's Rambler to other phones.
+# Other overrides in the file are kept; the file as it was is saved once and put back on undo.
+GB_PKG=com.google.android.inputmethod.latin; GB_PREFS=/data/user/0/$GB_PKG/shared_prefs
+GB_OVR=$GB_PREFS/flag_override.xml; RB_UNDO=$V/undo/gboard_flag_override
+RB_TRUE="enable_agentic_dictation config_agentic_dictation enable_jetson_in_toolbar filter_rambler_contributed_input_view_session
+  enable_rambler_al_toolbar_overflow_menu enable_hide_rambler_al_idling_state rambler_motion_with_gradient_color
+  agentic_dictation_spot_light2 agentic_dictation_new_gi_motion enable_jetson_s3_quota_experiment_override
+  agentic_dictation_disable_pre_session_quota_check enable_pcm_audio_caching_for_offline_fallback show_rambler_dict_settings"
+RB_FALSE="enable_rambler_al_toolbar agentic_dictation_enable_proactive_parallel_asr agentic_dictation_enable_seamless_fallback"
+RB_LONG="ad_activation_type=2"
+rb_names() { echo $RB_TRUE $RB_FALSE ${RB_LONG%%=*} | tr ' ' '|'; }
+rambler_on() { grep -q 'name="enable_agentic_dictation" value="true"' $GB_OVR 2>/dev/null; }
+rambler_write() {   # $1: new file content's path; keeps an existing file's owner and label, sets them on a new one
+  am force-stop $GB_PKG   # Gboard reads the overrides when it starts; Android restarts the keyboard right away
+  if [ -f $GB_OVR ]; then cat "$1" > $GB_OVR
+  else
+    cp "$1" $GB_OVR; chown $(stat -c %u:%g $GB_PREFS) $GB_OVR; chmod 660 $GB_OVR
+    chcon $(ls -Zd $GB_PREFS | awk '{print $1}') $GB_OVR
+  fi
+}
+rambler_apply() {
+  # Gboard's storage is locked until the first unlock after a boot; the file from the last apply stays in effect
+  [ -d $GB_PREFS ] || { log "rambler: Gboard's storage isn't readable yet (locked until the first unlock, or Gboard was never opened); open Gboard once and apply again"; return 1; }
+  mkdir -p $R $V/undo
+  if [ ! -e $RB_UNDO ] && [ ! -e $RB_UNDO.absent ]; then
+    if [ -f $GB_OVR ]; then cp $GB_OVR $RB_UNDO; else : > $RB_UNDO.absent; fi
+  fi
+  { if [ -f $GB_OVR ]; then grep -vE "name=\"($(rb_names))\"|</map>" $GB_OVR
+    else echo '<?xml version="1.0" encoding="utf-8" standalone="yes" ?>'; echo '<map>'; fi
+    for k in $RB_TRUE; do echo "    <boolean name=\"$k\" value=\"true\" />"; done
+    for k in $RB_FALSE; do echo "    <boolean name=\"$k\" value=\"false\" />"; done
+    for kv in $RB_LONG; do echo "    <long name=\"${kv%%=*}\" value=\"${kv#*=}\" />"; done
+    echo '</map>'; } > $R/gboard_flags.xml
+  grep -q '<map>' $R/gboard_flags.xml || { log "rambler: Gboard's flag_override.xml has no <map>; left alone"; rm -f $R/gboard_flags.xml; return 1; }
+  if cmp -s $R/gboard_flags.xml $GB_OVR; then log "rambler: on (Gboard's flag overrides already in place)"; rm -f $R/gboard_flags.xml; return 0; fi
+  rambler_write $R/gboard_flags.xml; rm -f $R/gboard_flags.xml
+  rambler_on || { log "rambler: couldn't write Gboard's flag overrides"; return 1; }
+  log "rambler: on; pick it in Gboard settings > Voice typing > Dictation type > Rambler"
+}
+rambler_off() {   # put Gboard's flag_override.xml back as it was; 0 if it changed
+  [ -e $RB_UNDO ] || [ -e $RB_UNDO.absent ] || return 1
+  [ -d $GB_PREFS ] || return 1   # locked: try again next time
+  if [ -e $RB_UNDO.absent ]; then am force-stop $GB_PKG; rm -f $GB_OVR
+  else rambler_write $RB_UNDO; fi
+  rm -f $RB_UNDO $RB_UNDO.absent
+}
+
 # Samsung's Mobile Hotspot offers 6 GHz only when SemWifiApServiceImpl.supportWifiAp6GBasedOnCountry() says
 # so, and that wants the CSC country (ro.csc.countryiso_code) on a hard-coded list (isRegionFor6GCountry).
 # Most S23 CSCs aren't on it, though the hardware and the stock hostapd run a 6 GHz hotspot fine.
@@ -1962,6 +2077,7 @@ why_not() {
     galaxyai)
       for p in $GAI_APPS; do [ -f /system/$p/${p#*/}.apk ] || { echo "this phone has no /system/$p/${p#*/}.apk to replace"; return; }; done ;;
     settingssearch) [ -f /system/$SSI/SecSettingsIntelligence.apk ] || echo "this phone has no /system/$SSI to replace" ;;
+    rambler) pm path $GB_PKG >/dev/null 2>&1 || echo "Gboard (com.google.android.inputmethod.latin) isn't installed" ;;
     nronly)
       [ -f "$CCF" ] || { echo "can't find this phone's customer_carrier_feature.json (mdc.system.path is '$CSYS')"; return; }
       [ -f $OMCDEC ] || { echo "files/omcdec is missing"; return; }
@@ -2020,6 +2136,7 @@ is_on() {
     dual5g) [ -f $D5G/applied ] ;;
     nronly) nr_ours ;;
     natroam) natroam_on ;;
+    rambler) rambler_on ;;
     *) return 1 ;;
   esac
 }
@@ -2141,6 +2258,8 @@ $CF_PROFPS"
   has afcontrol && { ff_set CAMERA_SUPPORT_AFSPEED TRUE; ff_set CAMERA_SUPPORT_AFSENSITIVITY TRUE; }
   has aelimit && ff_set CAMERA_SUPPORT_AUTO_EXPOSURE_LIMIT TRUE
   has slowmoaf && ff_set CAMERA_SUPPORT_AF_DURING_SLOWMOTION_RECORDING TRUE
+  if has logvideo; then logviull_apply   # restarts only the camera driver
+  elif bound $LV_LIB; then tb_restart lv_unbind && log "logvideo: not picked; stock VIULL back"; fi
   has tenbit && tenbit_apply   # restarts only the camera driver
   if has camextras; then hlock_apply   # restarts only the camera driver
   elif bound $HL_LIB || bound $HA_LIB || bound $HL2_LIB || bound $HA2_LIB; then tb_restart hl_unbind && log "camextras: not picked; stock EIS back"; fi
@@ -2160,6 +2279,8 @@ $CF_PROFPS"
   else nronly_off && restart=1; fi
   if has natroam; then natroam_apply && restart=1   # the Phone app reads the override when it starts
   elif natroam_off; then log "natroam: not picked; national roaming shows as roaming again"; restart=1; fi
+  if has rambler; then rambler_apply
+  elif rambler_off; then log "rambler: not picked; Gboard's flag overrides are back as they were"; fi
   if has hotspot6g; then hotspot6g_pre && restart=1   # after india, which may set the country to IN
   elif [ "$(getprop $H6_PROP)" = 1 ]; then /data/adb/ksu/bin/resetprop $H6_PROP 0 && log "hotspot6g: not picked; 6 GHz override off"; fi
   apk_binds
@@ -2237,7 +2358,7 @@ status)
   echo "battery:  auth IC $(mounted /sys/class/power_supply tmpfs && echo presented || { [ -e /sys/class/power_supply/sec_auth ] && echo "real (presence $(cat /sys/class/power_supply/sec_auth/presence 2>/dev/null), auth $(cat /sys/class/power_supply/sec_auth/batt_auth 2>/dev/null))" || echo off; }),"\
        "flags [$(grep -oE '<SEC_FLOATING_FEATURE_(BATTERY_SUPPORT_BSOH_SETTINGS|SETTINGS_ENABLE_EU_BATTERY_REGULATORY)>[A-Z]*' $FF | sed 's/<SEC_FLOATING_FEATURE_//; s/>/=/' | tr '\n' ' ')]"
   echo "display:  $(bound $FF && grep -q '<SEC_FLOATING_FEATURE_LCD_CONFIG_AOD_FULLSCREEN>1<' $FF && echo on || echo off), AOD brightness curve $(aodb_on && echo on || { [ -f $AODB ] && echo "added, waiting for a framework restart" || echo off; })"
-  echo "logvideo: $(is_on logvideo && echo on || echo off), Gallery LUTs $(bound $LV && echo on || echo off)"
+  echo "logvideo: $(is_on logvideo && echo on || echo off), Gallery LUTs $(bound $LV && echo on || echo off), low-light Log fix $(bound $LV_LIB && echo on || echo off)"
   echo "camextras: horizon lock $(is_on camextras && echo on || echo off), levelling $(bound $HL_LIB && echo "on ($(hl_desc))" || echo off), Director's view $(grep -q '<string name="directors_view_mode">1</string>' $CAM_PREFS 2>/dev/null && echo shown || echo hidden)"
   echo "autoframe: $(grep -o '<SEC_FLOATING_FEATURE_CAMERA_CONFIG_AUTOFRAMING>[^<]*' $FF | cut -d'>' -f2 | grep . || echo stock)"
   echo "bargein:  $(grep -q '<SEC_FLOATING_FEATURE_BIXBY_CONFIG_BARGEIN_PARAM_MODE>2<' $FF && echo on || echo off)"
@@ -2270,6 +2391,7 @@ status)
   echo "reported: model $(getprop ro.product.model), csc $(getprop ro.csc.sales_code), country $(getprop ro.csc.countryiso_code)$([ -e $V/india_identity ] && [ "$(getprop ro.product.model)" = $IN_MODEL ] && echo " (india identity on)")"
   echo "nronly:   $(nr_ours && echo "on (Network mode offers LTE only and 5G only)" || echo off)"
   echo "natroam:  $([ -s $NROAM ] && echo "on ($(grep -c . $NROAM) SIM override(s))" || echo off)"
+  echo "rambler:  $(rambler_on && echo "on (Gboard flag overrides)" || echo off)"
   echo "dual5g:   $([ -f $D5G/applied ] && echo "on (modem msim_plmns:$(cat $D5G/applied))" || echo off)$([ -f $D5G/stock/global_defines.xml ] && echo "; original backed up in $D5G/stock")"
   ;;
 cleanup)
@@ -2315,6 +2437,7 @@ cleanup)
     if dual5g_restore; then say "dual5g: original modem file restored"
     else say "dual5g: COULD NOT restore the modem file; the original stays in $D5G_SD"; cp -r $D5G $D5G_SD/state 2>/dev/null; fi
   fi
+  rambler_off && say "rambler: Gboard's flag overrides restored"
   natroam_off && say "natroam: carrier config overrides removed (national roaming shows again after the next reboot)"
   rm -f /dev/s23tweaks_efstool
   rm -f /data/adb/service.d/s23tweaks.sh
