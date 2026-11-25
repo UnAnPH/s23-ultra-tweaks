@@ -1,7 +1,7 @@
 id=s23_ultra_tweaks
 name=S23 Ultra Tweaks (Custom)
-version=v1.7.2-custom.1
-versionCode=17201
+version=v1.8.0-custom.1
+versionCode=18001
 author=dtechterminal (custom fork: UnAnPH)
 description=S24 features on a rooted Galaxy S23 Ultra + custom opt-in tweaks (UnAnPH fork); open the module page to choose.
 updateJson=https://raw.githubusercontent.com/UnAnPH/s23-ultra-tweaks/custom/module/update.json
