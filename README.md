@@ -6,6 +6,8 @@ The tweaks come in six categories. The module page lets you pick a whole categor
 Each one works on any S23 Ultra on One UI 9 unless it says otherwise.
 
 **What's new** (details in the [changelog](CHANGELOG.md)):
+- **v1.7.0** (next release): the camera update: flash and torch on the 0.6× ultrawide (`wideflash`), 24 fps now on the rear and front cameras (`cam24fps`), white-balance tint in Pro video (`prowbtint`), the Video zoom rocker (`zoomrocker`), Camera Assistant's Video softening, autofocus speed/sensitivity and auto exposure limit (`videosoftening`, `afcontrol`, `aelimit`), touch focus in Slow motion (`slowmoaf`), recording to USB-C storage (`extstorage`), anamorphic desqueeze (`anamorphic`), extra Pro video frame rates, including 4K120 on the Wide/Ultrawide, 21:9 Cinema and the 10× super tele at 25/48/50 on the patched Camera APK (`profps`), and 4K120 in Slow motion (`slowmo4k120`). Flash, tint, the zoom rocker and 24 fps are grouped as one **Camera Tweaks** switch in the module page.
+- **v1.6.0**: Dual SIM 5G (`dual5g`): 5G standalone on both SIMs at once, instead of only the data SIM. The original modem file is backed up first.
 - **v1.3.5**: HideKSU can now also hide the module's own mounts from apps you list, so mount-scanning root detectors and banking apps no longer see the tweaks (verified against Native Detector).
 - **v1.3.4**: the 6 GHz hotspot no longer changes the phone's country, so Samsung Wallet keeps working with it on.
 - **v1.3.3**: the India config now also makes Samsung Wallet India (UPI) and the 6 GHz hotspot work, by reporting the phone as the Indian model (reverts on reboot).
@@ -34,44 +36,71 @@ Each one works on any S23 Ultra on One UI 9 unless it says otherwise.
 - 🎯 **8 · 4K auto framing** in video, as on the S24. Works on the SM-S918W (front camera, UHD with auto framing on); **reported to make the camera fail** on an S918B, so it's not included when you pick the whole Camera category · `autoframe`
 - 🌈 **9 · 10-bit HDR video from the front cameras in any app** (Camera2 HLG10), as the rear cameras already allow. Samsung Camera keeps its own HDR10+. Patches a copy of the phone's own camera driver and keeps it only if a front camera then really offers 10-bit; the first apply takes about 15 s longer · `tenbit`
   - Works on: any S23 Ultra whose camera driver has the expected code (found in One UI 6 and 9 builds; tested on S918WVLU8GZIF)
-- 🎥 **10 · 24 FPS in standard Video**: unlocks 24 fps for FHD (1080p), UHD (4K) and 8K in Samsung Camera's standard Video mode (not just Pro video). Adds `video` to the 24 fps entries in `camera-feature.xml` and adds `RESOLUTION_3840X2160_24FPS` + `RESOLUTION_1920X1080_24FPS` to `te.f0.i` (8K 24 is already allowlisted) in a copy of `SamsungCamera.apk` (`device/files/SamsungCamera-24fps-<firmware>.patch`, made by `tools/cam24patch.py`) · `cam24fps`
+- 🎥 **10 · 24 FPS in standard Video**: unlocks 24 fps for FHD (1080p), UHD (4K) and 8K in Samsung Camera's standard Video mode (not just Pro video), on the rear and front cameras. Adds `video` to the 24 fps entries (back and front) in `camera-feature.xml` and adds `RESOLUTION_3840X2160_24FPS` + `RESOLUTION_1920X1080_24FPS` to `te.f0.i` (8K 24 is already allowlisted) in a copy of `SamsungCamera.apk` (`device/files/SamsungCamera-24fps-<firmware>.patch`, made by `tools/cam24patch.py`) · `cam24fps`
   - Works on: a stock Samsung Camera 17.0.00.43 the patch knows, checked by MD5 whatever the firmware name (so far S918BXXUAGZIF and S918WVLU8GZIF; no download needed). `tools/cam24patch.py` adds another
+- 🔦 **11 · Flash on the 0.6× ultrawide**: Photo's flash and Video's torch work on the 0.6× ultrawide lens, and Camera Assistant gets the matching wide-flash option. Two switches in `camera-feature.xml` (`SUPPORT_FLASH_IN_WIDE_LENS`, `SUPPORT_CAMERA_ASSISTANT_WIDE_FLASH_MENU`); no APK or HAL patch · `wideflash`
+  - Works on: any S23 Ultra whose `camera-feature.xml` can be edited (validated on-device on an S23 Ultra)
+- 🎚️ **12 · White-balance tint in Pro**: the **Tint** slider next to the colour temperature in Pro and Pro video's white balance (`SUPPORT_PRO_WHITE_BALANCE_TINT`); no APK or HAL patch · `prowbtint`
+  - Works on: any S23 Ultra whose `camera-feature.xml` can be edited
+- 🎥 **13 · Video zoom rocker**: the smooth zoom rocker/slider in the standard Video mode, as on newer models (`SUPPORT_VIDEO_MODE_ZOOM_ROCKER`); no APK or HAL patch · `zoomrocker`
+  - Works on: any S23 Ultra whose `camera-feature.xml` can be edited
+- 🎞️ **14 · Video softening**: Camera Assistant's **Video softening** (Off / Medium / High), which reduces over-sharpening in video (`CAMERA_SUPPORT_VIDEO_SOFTENING`); no APK or HAL patch · `videosoftening`
+  - Works on: any S23 Ultra on One UI 9; the switch is in Camera → Settings → Camera Assistant
+- 🎯 **15 · Autofocus speed and sensitivity**: Camera Assistant's **AF speed** and **AF sensitivity** controls (`CAMERA_SUPPORT_AFSPEED`, `CAMERA_SUPPORT_AFSENSITIVITY`); no APK or HAL patch · `afcontrol`
+  - Works on: any S23 Ultra on One UI 9; the switches are in Camera → Settings → Camera Assistant
+- 📏 **16 · Auto exposure limit**: Camera Assistant's **Auto exposure limit**, which caps how far the camera raises ISO or slows the shutter (`CAMERA_SUPPORT_AUTO_EXPOSURE_LIMIT`); no APK or HAL patch · `aelimit`
+  - Works on: any S23 Ultra on One UI 9; the switch is in Camera → Settings → Camera Assistant
+- 👆 **17 · Touch focus in Slow motion**: tap the viewfinder to focus while recording a slow-motion video (`SUPPORT_SLOW_MOTION_AF_DURING_RECORDING` and `CAMERA_SUPPORT_AF_DURING_SLOWMOTION_RECORDING`); no APK or HAL patch · `slowmoaf`
+  - Works on: any S23 Ultra whose `camera-feature.xml` can be edited
+- 💾 **18 · Record to USB-C storage**: records straight to a USB-C SSD or drive in every video mode (4K60, 4K60 21:9, 8K, FHD120), by flipping `external-storage-support` to `true` on the resolution map lines; no APK or HAL patch · `extstorage`
+  - Works on: any S23 Ultra whose `camera-feature.xml` can be edited
+- 🎥 **19 · Anamorphic desqueeze**: Camera Assistant's **anamorphic lens desqueeze** (1.33× / 1.55× / 2.0×) for anamorphic lenses (`SUPPORT_CAMERA_ASSISTANT_ANAMORPHIC_LENS`, `SUPPORT_CAMERA_ASSISTANT_ANAMORPHIC_LENS_HW_SCALER`); no APK or HAL patch · `anamorphic`
+  - Works on: any S23 Ultra whose `camera-feature.xml` can be edited
+- ⏱️ **20 · Extra Pro video frame rates**: 4K 25/48/50/100/120 (120 on the Wide and Ultrawide), FHD 25/48/50/100, 8K 25, and 21:9 Cinema 25/48/50/100/120 in Pro video. On a phone whose `SamsungCamera.apk` the patch knows, it also unhides the **10× super tele at 25/48/50 fps**; the 0.6×, 1× and 3× work everywhere, and 8K stays 10×-free (HAL limitation) · `profps`
+  - Works on: any S23 Ultra whose `camera-feature.xml` can be edited; the 10× needs the patched Camera APK (S918BXXUAGZIF today, `device/files/SamsungCamera-24fps-S918BXXUAGZIF.patch`)
+- 🐢 **21 · 4K120 in Slow motion**: adds 4K120 and FHD120 to the Slow motion mode, and rebuilds the FHD240 menu entry so the Slow motion resolution list is complete (`supported-mode="slow_motion"`); the Log profile works with `logvideo` on · `slowmo4k120`
+  - Works on: any S23 Ultra whose `camera-feature.xml` has the 4K120 entry
+
+All twelve camera tweaks added in this fork — 24 fps (rear and front), flash on the 0.6× ultrawide, white-balance tint, the Video zoom rocker, 4K120 in Slow motion, video softening, AF speed/sensitivity, auto exposure limit, touch focus in Slow motion, USB-C storage, anamorphic desqueeze and the extra Pro video frame rates — are grouped as one **Camera Tweaks** switch in the module page. They stay independent in `tweaks.sh`, and all twelve were tested individually and validated on an S23 Ultra.
 
 ### 🎨 Display and graphics
 
-- 🖌️ **11 · Always On Display: lock screen wallpaper, and AOD brightness that follows the room light** · `display`
-- 🌤️ **12 · Adaptive color tone**: Settings → Display, the screen's colour follows the room light · `colortone`
+- 🖌️ **22 · Always On Display: lock screen wallpaper, and AOD brightness that follows the room light** · `display`
+- 🌤️ **23 · Adaptive color tone**: Settings → Display, the screen's colour follows the room light · `colortone`
   - Works on: firmware S918WVLU8GZIF or S918BXXUAGZIF (1 MB download)
-- ⚡ **13 · Vulkan rendering**: apps draw with Vulkan instead of OpenGL, as on the S24 · `vulkan`
+- ⚡ **24 · Vulkan rendering**: apps draw with Vulkan instead of OpenGL, as on the S24 · `vulkan`
+- 🌧️ **25 · Lock screen weather effect**: rain, snow, fog or sun animated over your own lock screen wallpaper, following Samsung Weather. Brings back the **Weather** button in the lock screen editor (Wallpaper and style → Lock screen → Weather → Done). It animates only when the weather calls for it: cloudy weather and clear nights show nothing. The editor asks Samsung AI Core before it offers Weather, and the S23 has none, so the module installs a 12 KB stub app (`com.samsung.android.aicore`, source in `src/aicorestub`) that answers just those checks; a real AI Core is left alone. It also turns Samsung's live wallpaper app back on if a debloat disabled it · `weather`
 
 ### ✨ Galaxy AI and Samsung apps
 
-- 🧠 **14 · Now Brief, Creative Studio and Call Assist** from the S24 · `galaxyai`
+- 🧠 **26 · Now Brief, Creative Studio and Call Assist** from the S24 · `galaxyai`
   - Works on: firmware S918WVLU8GZIF (219 MB download)
-- 🔇 **15 · Audio Eraser**: Gallery → video → Edit → remove wind, noise, music or voices · `audioeraser`
+- 🔇 **27 · Audio Eraser**: Gallery → video → Edit → remove wind, noise, music or voices · `audioeraser`
   - Works on: firmware S918WVLU8GZIF (34 MB download)
-- 🔎 **16 · Settings search** bar from the S24. Natural-language answers stay off (they need Samsung's Semantic Search Core 4.x) · `settingssearch`
+- 🔎 **28 · Settings search** bar from the S24. Natural-language answers stay off (they need Samsung's Semantic Search Core 4.x) · `settingssearch`
   - Works on: firmware S918WVLU8GZIF (10 MB download)
-- 📞 **17 · Call screening** in the Phone app: screening, greeting, voice messages and the AI summary work. **Stays after a reboot** · `callscreen`
+- 📞 **29 · Call screening** in the Phone app: screening, greeting, voice messages and the AI summary work. **Stays after a reboot** · `callscreen`
   - Works on: firmware S918WVLU8GZIF (3.1 GB download, about 7 GB free while it installs)
-- 🗣️ **18 · Bixby barge-in**: talk over Bixby while it answers. **Untested** · `bargein`
+- 🗣️ **30 · Bixby barge-in**: talk over Bixby while it answers. **Untested** · `bargein`
 
 ### 🔋 Battery and settings
 
-- 🩺 **19 · Battery health**: Settings → Battery → Battery information shows health and cycle count · `battery`
-- ⏰ **20 · Auto power on/off** schedule and **louder VoIP calls** · `features`
-- 🫥 **21 · HideKSU**: hides the KernelSU root manager (`me.weishu.kernelsu`) from apps, so root-aware apps like CRED stop detecting root and crashing. Nothing is injected into the apps, so their in-process tamper scans stay clean. The manager stays installed — its launcher icon, DFRoot's boot-time root and the system still see it; only third-party apps don't. Needs the KernelSU manager installed. It replaces `services.jar` with a patched copy of the phone's own, so it only runs on a phone whose stock `services.jar` is one a patch was made from (checked by MD5, whatever the firmware name): so far the SM-S918W's (S918WVLU8GZIF), an SM-S918B INS one and an SM-S918U1 one. Applies on a framework restart. It also **hides the module's own mounts** from every user-installed app automatically (keeping them for the preinstalled Samsung apps that consume them; see [Hiding the module's mounts](#hiding-the-modules-mounts)), so mount-scanning detectors and banking apps don't see the tweaks' bind/overlay mounts · `hideksu`
+- 🩺 **31 · Battery health**: Settings → Battery → Battery information shows health and cycle count · `battery`
+- ⏰ **32 · Auto power on/off** schedule and **louder VoIP calls** · `features`
+- 🫥 **33 · HideKSU**: hides the KernelSU root manager (`me.weishu.kernelsu`) from apps, so root-aware apps like CRED stop detecting root and crashing. Nothing is injected into the apps, so their in-process tamper scans stay clean. The manager stays installed — its launcher icon, DFRoot's boot-time root and the system still see it; only third-party apps don't. Needs the KernelSU manager installed. It replaces `services.jar` with a patched copy of the phone's own, so it only runs on a phone whose stock `services.jar` is one a patch was made from (checked by MD5, whatever the firmware name): so far the SM-S918W's (S918WVLU8GZIF), an SM-S918B INS one and an SM-S918U1 one. Applies on a framework restart. It also **hides the module's own mounts** from every user-installed app automatically (keeping them for the preinstalled Samsung apps that consume them; see [Hiding the module's mounts](#hiding-the-modules-mounts)), so mount-scanning detectors and banking apps don't see the tweaks' bind/overlay mounts · `hideksu`
 
 ### 📱 Carrier
 
-- ⏺️ **22 · Call recording** in the Samsung Phone app, on any sales code: the module decodes the phone's own carrier config and allows recording in it · `callrec`
-- 🇮🇳 **23 · India carrier config** for Airtel / Jio SIMs: the **Use 5G standalone networks** switch (Settings → Connections → Mobile networks), call recording, Smart IVR, message cards and more. It also makes the phone report itself as the Indian S23 Ultra (SM-S918B / INS / country IN) so **Samsung Wallet India** (UPI, DigiLocker, transit) and the **6 GHz hotspot** work; this is a runtime change that reverts on reboot and never writes the sales code to disk (no factory-reset risk). If Samsung Wallet still shows "not supported" after applying (it can cache the earlier state), clear its storage — Settings → Apps → Samsung Wallet → Storage → **Clear data** — and reopen it. It also **stops Samsung's "Switch to \<carrier\>?" prompt** (the CID Manager dialog that keeps asking to restart and re-flash the carrier customization when the SIM's carrier doesn't match the reported sales code), which is reverted when you unpick `india` or remove the module. Works on any sales code on One UI 9. With an Indian SIM, picking the Carrier category takes this instead of call recording · `india`
+- ⏺️ **34 · Call recording** in the Samsung Phone app, on any sales code: the module decodes the phone's own carrier config and allows recording in it · `callrec`
+- 🇮🇳 **35 · India carrier config** for Airtel / Jio SIMs: the **Use 5G standalone networks** switch (Settings → Connections → Mobile networks), call recording, Smart IVR, message cards and more. It also makes the phone report itself as the Indian S23 Ultra (SM-S918B / INS / country IN) so **Samsung Wallet India** (UPI, DigiLocker, transit) and the **6 GHz hotspot** work; this is a runtime change that reverts on reboot and never writes the sales code to disk (no factory-reset risk). If Samsung Wallet still shows "not supported" after applying (it can cache the earlier state), clear its storage — Settings → Apps → Samsung Wallet → Storage → **Clear data** — and reopen it. It also **stops Samsung's "Switch to \<carrier\>?" prompt** (the CID Manager dialog that keeps asking to restart and re-flash the carrier customization when the SIM's carrier doesn't match the reported sales code), which is reverted when you unpick `india` or remove the module. Works on any sales code on One UI 9. With an Indian SIM, picking the Carrier category takes this instead of call recording · `india`
+- 📶 **36 · Dual SIM 5G**: 5G standalone on **both SIMs at the same time**, instead of only the SIM set for mobile data. The S23's modem can do it; Samsung's modem config allows it only on Chinese and Costa Rican networks. The module adds your SIMs' country to that list. Unlike the other tweaks this one **stays after a reboot** (it's a file in the modem's own storage); the original is backed up first and goes back when you un-pick it or remove the module · `dual5g` ([details](#dual-sim-5g))
 
-Not included, because they don't work on the S23: the S24's AI weather wallpaper (its model is built
-only for the S24's NPU), Dual rec (can't open the S23's cameras), and two-lens or seamless-zoom
+Not included, because they don't work on the S23: the AI-generated weather wallpaper, which redraws the
+photo for each kind of weather (its model is built only for newer NPUs; the weather effect above is a
+different feature), Dual rec (can't open the S23's cameras), and two-lens or seamless-zoom
 Portrait video (they crash the camera).
 
-**Nothing is written to any partition.** Every change is a kernel module load, an overlay, a bind mount or a runtime setting. The files behind them stay on storage in `/data/adb/s23tweaks`, so they use no RAM. A reboot puts the phone back to stock, and then the tweaks re-apply by themselves (see [After a reboot](#after-a-reboot)). The exceptions: two Google Play services flag overrides that `airdrop` adds, the camera setting that shows Director's view (`camextras`), and Samsung Language Core, which `callscreen` installs as an app update (see [Undo](#undo)).
+**Apart from `dual5g`, nothing is written to any partition.** Every change is a kernel module load, an overlay, a bind mount or a runtime setting. The files behind them stay on storage in `/data/adb/s23tweaks`, so they use no RAM. A reboot puts the phone back to stock, and then the tweaks re-apply by themselves (see [After a reboot](#after-a-reboot)). The exceptions: the Google Play services flag overrides that `airdrop` adds, the camera setting that shows Director's view (`camextras`), Samsung Language Core, which `callscreen` installs as an app update, and the AI Core stub app that `weather` installs (see [Undo](#undo)). `dual5g` edits one policy file inside the modem, which the modem keeps on its own storage; see [Dual SIM 5G](#dual-sim-5g) for its backup and undo.
 
 **Different firmware?** Point your AI coding agent at [AGENTS.md](AGENTS.md) and it can build the kernel modules for your phone (see [Other firmware](#other-firmware-let-your-ai-agent-build-it)).
 
@@ -331,6 +360,50 @@ injected, and the files it would have seen are simply the stock ones.
   zygote does), and a detach there would remove the tweaks for the whole phone.
 - It runs only while `hideksu` is on.
 
+<a id="dual-sim-5g"></a>
+
+## 📶 Dual SIM 5G
+
+With two SIMs, the S23 Ultra normally gives 5G standalone (SA) only to the SIM picked for mobile data;
+the other one drops to LTE, and they swap within a second when you change the data SIM. That isn't the
+hardware: the modem (Snapdragon X70) supports 5G on both SIMs in dual standby ("5G+5G DSDS"), and
+Android already asks it for 5G on both. The modem's own policy files decide:
+
+- `/policyman/device_config.xml`: `<msim_config mode="5G_PLUS_5G" list="msim_plmns"/>`, so 5G+5G applies only on the networks in `msim_plmns`;
+- `/policyman/global_defines.xml`: Samsung's `msim_plmns` is `460-* 712-*`, China and Costa Rica only;
+- everywhere else the modem runs 5G+4G, and `/policyman/disable_sa_ndds.xml` removes the SA bands from the SIM that isn't the data SIM.
+
+`dual5g` adds your SIMs' mobile country codes to `msim_plmns`: it reads them from the SIMs (and the
+networks they're on) at each apply, adding all of a country's codes where it has several (India 404, 405,
+406; the US 310–316; Japan 440, 441; the UK 234, 235). It only adds; what's already listed stays. The
+file lives in the modem's storage (EFS), which the module reaches with its own small tool
+(`files/efstool`, source in `src/efstool`) through the phone's stock `diag_socket_log` — no computer,
+nothing flashed. The modem only reads the file when it starts, so after a change the module restarts
+just the modem (about 15 seconds without signal, no phone reboot). At later boots, when the list already
+has your country, nothing is written and the modem isn't restarted.
+
+**Backups, before anything is changed:**
+
+- the original file (and the two related policy files, for reference) goes to `/data/adb/s23tweaks/dual5g/stock/` once, before the first write, and is never overwritten;
+- a copy of it, with a README, goes to **Download/s23tweaks-modem-backup/** on the phone, where you can see it and copy it off;
+- every write also saves the file it replaces as `/data/adb/s23tweaks/dual5g/before-<date>.xml`;
+- each write is read back from the modem and compared; if it doesn't match, the previous file is written back.
+
+**Undo:** un-pick `dual5g` and apply, or remove the module: the original file goes back and the modem
+restarts. By hand:
+
+```sh
+adb shell su -c "sh /data/adb/modules/s23_ultra_tweaks/tweaks.sh dual5g-restore"
+```
+
+Without the module at all, the service menu rewrites the modem's stock config: dial `*#27663368378#` →
+ETC → MCFG → **MCFG HW & SW RELOAD**. A firmware update can also reset the list; the next apply adds
+your country again.
+
+Whether a SIM shows 5G still depends on its coverage where you are. Tested on an SM-S918W with Airtel
+(data) and Jio: before, the standby SIM was never on SA; after, it stayed on SA while Airtel had data,
+and both were on SA (and VoNR) at once.
+
 <a id="undo"></a>
 
 ## ↩️ Undo
@@ -338,9 +411,11 @@ injected, and the files it would have seen are simply the stock ones.
 **Remove the module** (KernelSU → Modules → S23 Ultra Tweaks → Uninstall) and reboot. During that
 boot the module cleans up after itself once the phone is unlocked:
 
-- removes AirDrop's two Play services flag overrides;
+- removes AirDrop's Play services flag overrides;
 - uninstalls Samsung Language Core and its Call screening settings, if `callscreen` installed it;
+- uninstalls the AI Core stub, if `weather` installed it (unpicking `weather` also removes it);
 - puts the Camera app's Director's view setting back the way it was (`camextras`);
+- puts the modem's original 5G+5G list back, if `dual5g` changed it (unpicking `dual5g` also does);
 - drops Android's cached manifests of the apps the tweaks swap, so the stock apps are re-read;
 - deletes `/data/adb/s23tweaks` (downloads, logs, backups) and the boot script.
 
@@ -358,7 +433,7 @@ items (the flags do nothing on their own; `tweaks.sh unflag` removes just them).
 ## ⚠️ Known limitations
 
 - **AirDrop needs One UI 9 build GZIF** (S918WVLU8GZIF, S918BXXUAGZIF, S918U1UEU8GZIF, S918USQU8GZIF or S918NKSU8GZIF). The modules are built on the S918W kernel. The other four have the same Wi-Fi drivers and the same kernel symbol CRCs, checked with `tools/kocompat.py` and `tools/modcmp.py` against their firmware files, but only the S918W and S918B have been tested on a phone. A different build needs the modules rebuilt (below).
-  - **Custom kernels** (untested, opt-in): on one of those builds with a non-Samsung 5.15 android13 kernel, `su -c touch /data/adb/s23tweaks/allow-any-kernel` lets AirDrop and Wi-Fi 7 try anyway. The kernel needs `CONFIG_MODVERSIONS` and must not force module signatures. It still refuses the modules if any kernel symbol they use has a different CRC, and the module then puts the stock Wi-Fi driver back. Delete the file to go back to the check.
+  - **Custom kernels** (untested, opt-in): on one of those builds with a non-Samsung 5.15 android13 kernel, `su -c touch /data/adb/s23tweaks/allow-any-kernel` lets AirDrop and Wi-Fi 7 try anyway. The kernel needs `CONFIG_MODVERSIONS` and must not force module signatures. It still refuses the modules if any kernel symbol they use has a different CRC, and the module then puts the stock Wi-Fi driver back. Delete the file to go back to the check. AirDrop also needs the kernel's stock Wi-Fi stack: a kernel that ships its own `cfg80211.ko` (its `vermagic` isn't `5.15.197-android13-8-34343818-ab…`) makes the S24 driver fail to register, so AirDrop is shown as not available there; Wi-Fi 7 and the 6 GHz hotspot still work (issue #21).
 - **Horizontal lock levels only up to about 20°** and isn't the S26's 360° lock (see [Horizontal lock](#horizontal-lock)).
 - The Wi-Fi link to the PCIe bus stays at Gen2, so very large transfers may be slower than on an S24.
 - `callrec` and `india` work on the carrier config of whatever sales code the phone runs (the folder in `mdc.system.path`). `callrec` decodes the stock `cscfeature.xml` on the phone (`files/omcdec`, from `src/omcdec`) and adds the two recording keys to every `FeatureSet`, so it needs no per-firmware files. `india` binds the INS files of S918BXXUAGZIF (One UI 9) over the phone's `cscfeature.xml`, `customer_carrier_feature.json` and `customer.xml`, and adds the INS keystrings and regulatory images to a copy of its prism folder. `india` also runs `resetprop` so the phone reports itself as the Indian S23 Ultra (model `SM-S918B`, sales code `INS`, country `IN`): Samsung's server then accepts it as an Indian device, so Samsung Wallet's India features (UPI, DigiLocker, transit) and the 6 GHz hotspot work. That is a runtime property override only — it reverts on reboot and writes none of the CSC files, so there is no factory-reset risk — but while it is on the reported model changes for every app, and adding bank payment cards may still fail because that path checks the real model through hardware attestation. So far `callrec` is tested on XAC and EUX, and `india` on XAC (carrier config and Samsung Wallet verified). Neither tweak ever writes the sales code (`mps_code.dat`, `sales_code.dat`, `omc.info`); changing those on disk can factory-reset the phone.

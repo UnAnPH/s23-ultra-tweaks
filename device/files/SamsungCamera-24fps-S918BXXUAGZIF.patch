@@ -1,0 +1,51 @@
+# 24 FPS in standard Video (FHD/UHD/8K) + 10x super tele at 25/48/50 fps in Pro video: SamsungCamera.apk (S918BXXUAGZIF, md5 174e38e111f53c92eea54fd8b9a8c1c6) -> md5 b22942b22ec14896bc02277d319b7623
+# Adds ONLY UHD24 and FHD24 to te.f0.i in Lte/f0;-><clinit>() by replacing unused Fold/Flip slots
+# (4000x1868 -> UHD24, 2224x1080 -> FHD24; 8K24 is already in te.f0.i). Leaves te.c0.c() stock so QHD stays hidden.
+# Unhides BACK_SECOND_TELE at 25/48/50 fps in Pro video in Led/g;.i: the 10x branch uses the
+# same 8K-only check as the 3x (cd.a.h -> te.c0.S0), so it shows in those modes and stays hidden at 8K.
+# Made by tools/cam24patch.py. Format: <zero-based file offset> <new byte in octal>
+10726138 111
+10726139 333
+10726140 261
+10726141 325
+10726180 102
+10726181 320
+10726182 212
+10726183 62
+10726184 52
+10726185 210
+10726186 324
+10726187 104
+10726188 107
+10726189 275
+10726190 237
+10726191 61
+10726192 64
+10726193 255
+10726194 120
+10726195 33
+10726196 111
+10726197 222
+10726198 377
+10726199 334
+10726200 65
+10726201 377
+10726202 162
+10726203 140
+15689592 0
+15689593 0
+15689594 0
+15689595 0
+15689596 161
+15689597 20
+15689598 12
+15689599 356
+15689600 1
+15689601 0
+15689604 70
+16644154 100
+16644176 44
+67866941 111
+67866942 333
+67866943 261
+67866944 325

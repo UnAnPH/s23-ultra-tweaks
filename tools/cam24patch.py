@@ -5,6 +5,8 @@ te.f0.i standard-Video allowlist:
   - RESOLUTION_4000X1868 -> RESOLUTION_3840X2160_24FPS (4K 24 fps)
   - RESOLUTION_2224X1080 -> RESOLUTION_1920X1080_24FPS (1080p 24 fps)
 (8K 24 fps / RESOLUTION_7680X4320_24FPS is already in te.f0.i.)
+Also unhides the 10x super tele (BACK_SECOND_TELE) at 25/48/50 fps in Pro video: in Led/g;.i its
+Lcd/a;.h (isVideoResolutionSupported) check becomes the 3x's 8K-only Lte/c0;.S0 check.
 Leaves te.c0.c() stock so QHD stays excluded from non-Super-Steady Video, and fixes dex SHA-1, adler32 and zip CRCs.
 Usage: cam24patch.py SamsungCamera.apk <build> [out.patch]     (prints the stock and patched MD5)"""
 import hashlib, struct, sys, zlib
@@ -14,6 +16,69 @@ def uleb(d, p):
     while True:
         b = d[p]; p += 1; r |= (b & 0x7f) << s; s += 7
         if b < 0x80: return r, p
+
+def find_profps_patches(d):
+    """Return [(byte_offset, old_bytes, new_bytes), ...] for the BACK_SECOND_TELE check in Led/g;.i.
+    The 10x branch calls Lcd/a;.h (isVideoResolutionSupported), which blocks 25/48/50 fps even on a HAL
+    that supports it; the 3x branch only checks that the resolution isn't 8K (Lte/c0;.S0). Use the same
+    check for the 10x, so it appears in every Pro video mode except 8K."""
+    u32 = lambda o: struct.unpack_from('<I', d, o)[0]
+    u16 = lambda o: struct.unpack_from('<H', d, o)[0]
+    strs, typs, flds, mths, clss = u32(60), u32(68), u32(84), u32(92), u32(100)
+    nfld, nmth, ncls = u32(80), u32(88), u32(96)
+    def string(i):
+        _, p = uleb(d, u32(strs + 4 * i)); return d[p:d.index(b'\0', p)].decode('utf-8', 'replace')
+    def typ(i):
+        return string(u32(typs + 4 * i))
+
+    f_bst = m_cdh = m_s0 = None
+    for fi in range(nfld):
+        ci, _, ni = struct.unpack_from('<HHI', d, flds + 8 * fi)
+        if typ(ci) == 'Ll9/x;' and string(ni) == 'BACK_SECOND_TELE':
+            f_bst = fi
+    for mi in range(nmth):
+        ci, _, ni = struct.unpack_from('<HHI', d, mths + 8 * mi)
+        t, n = typ(ci), string(ni)
+        if t == 'Lcd/a;' and n == 'h':
+            m_cdh = mi
+        elif t == 'Lte/c0;' and n == 'S0':
+            m_s0 = mi
+    if f_bst is None or m_cdh is None or m_s0 is None:
+        return None
+
+    for c in range(ncls):
+        o = clss + 32 * c
+        if typ(u32(o)) != 'Led/g;':
+            continue
+        p = u32(o + 24); assert p, 'Led/g; has no class data'
+        ns, p = uleb(d, p); ni, p = uleb(d, p); nd, p = uleb(d, p); nv, p = uleb(d, p)
+        for _ in range(2 * (ns + ni)): _, p = uleb(d, p)
+        for count in (nd, nv):          # i can be a direct or a virtual method
+            m = 0
+            for _ in range(count):
+                diff, p = uleb(d, p); _, p = uleb(d, p); code, p = uleb(d, p); m += diff
+                if string(u32(mths + 8 * m + 4)) != 'i' or not code:
+                    continue
+                units = u32(code + 12); base = code + 16
+                hits = []
+                for u in range(units - 8):
+                    if u16(base + 2 * u) != 0x0362: continue                 # sget-object v3, BACK_SECOND_TELE
+                    if u16(base + 2 * u + 2) != f_bst: continue
+                    if u16(base + 2 * (u + 2)) != 0x306e: continue           # invoke-virtual {v7, v1, v3}, cd.a.h
+                    if u16(base + 2 * (u + 3)) != m_cdh: continue
+                    if u16(base + 2 * (u + 4)) != 0x0317: continue
+                    if u16(base + 2 * (u + 5)) != 0x030a: continue           # move-result v3
+                    if u16(base + 2 * (u + 6)) != 0x0339: continue           # if-nez v3, +3
+                    if u16(base + 2 * (u + 7)) != 0x0003: continue
+                    hits.append(u)
+                assert len(hits) == 1, 'expected 1 BACK_SECOND_TELE check in Led/g;.i, found %d' % len(hits)
+                u = hits[0]
+                return [
+                    (base + 2 * u,       struct.pack('<HH', 0x0362, f_bst), b'\0\0\0\0'),
+                    (base + 2 * (u + 2), struct.pack('<HHH', 0x306e, m_cdh, 0x0317), struct.pack('<HHH', 0x1071, m_s0, 0x0001)),
+                    (base + 2 * (u + 6), struct.pack('<H', 0x0339), struct.pack('<H', 0x0338)),
+                ]
+    return None
 
 def find_clinit_patches(d):
     """Return list of (byte_offset_in_dex, old_reg, new_reg, label) for UHD24 and FHD24 swaps in Lte/f0;-><clinit>()."""
@@ -98,7 +163,7 @@ if len(sys.argv) < 3:
 apk = bytearray(open(sys.argv[1], 'rb').read()); build = sys.argv[2]
 stock = hashlib.md5(apk).hexdigest(); orig = bytes(apk)
 eocd = apk.rindex(b'PK\x05\x06'); ncd, _, cd = struct.unpack_from('<HII', apk, eocd + 10)
-done = False
+done_clinit = done_profps = False
 for _ in range(ncd):
     assert apk[cd:cd + 4] == b'PK\x01\x02'
     method, = struct.unpack_from('<H', apk, cd + 10)
@@ -108,26 +173,44 @@ for _ in range(ncd):
     if name.endswith('.dex') and '/' not in name:
         assert method == 0, name + ' is compressed; this patch format needs stored dex files'
         lnl, lel = struct.unpack_from('<HH', apk, lh + 26); start = lh + 30 + lnl + lel
-        dex = apk[start:start + size]; patches = find_clinit_patches(dex)
-        if patches is not None:
-            for at, old_reg, new_reg, label in patches:
-                assert dex[at] == old_reg and dex[at + 1] == 0x00, 'unexpected register bytes at 0x%x' % at
-                dex[at] = new_reg
-                print('%s: te.f0.<clinit> te.f0.i %s v%d -> v%d at file offset %d' % (name, label, old_reg, new_reg, start + at))
+        dex = apk[start:start + size]
+        clinit = find_clinit_patches(dex)
+        profps = find_profps_patches(dex)
+        if clinit is not None or profps:
+            if clinit is not None:
+                for at, old_reg, new_reg, label in clinit:
+                    assert dex[at] == old_reg and dex[at + 1] == 0x00, 'unexpected register bytes at 0x%x' % at
+                    dex[at] = new_reg
+                    print('%s: te.f0.<clinit> te.f0.i %s v%d -> v%d at file offset %d' % (name, label, old_reg, new_reg, start + at))
+                done_clinit = True
+            if profps:
+                for at, old, new in profps:
+                    assert dex[at:at + len(old)] == old, 'unexpected BACK_SECOND_TELE bytes at 0x%x' % at
+                    dex[at:at + len(new)] = new
+                print('%s: Led/g;.i BACK_SECOND_TELE 10x check unhidden for 25/48/50 fps at file offset %d' % (name, start + profps[0][0]))
+                done_profps = True
             dex[12:32] = hashlib.sha1(dex[32:]).digest()
             dex[8:12] = struct.pack('<I', zlib.adler32(bytes(dex[12:])))
             apk[start:start + size] = dex
             crc = struct.pack('<I', zlib.crc32(bytes(dex)))
             apk[lh + 14:lh + 18] = crc; apk[cd + 16:cd + 20] = crc
-            done = True
     cd += 46 + nl + el + cl
-assert done, 'Lte/f0;-><clinit> allowlist slots not found in any dex'
+assert done_clinit, 'Lte/f0;-><clinit> allowlist slots not found in any dex'
+if not done_profps:
+    print('note: Led/g;.i BACK_SECOND_TELE check not found; the patch enables only 24 fps', file=sys.stderr)
 new = hashlib.md5(apk).hexdigest()
-out = ['# 24 FPS in standard Video (FHD/UHD/8K): SamsungCamera.apk (%s, md5 %s) -> md5 %s' % (build, stock, new),
+title = '# 24 FPS in standard Video (FHD/UHD/8K)'
+if done_profps:
+    title += ' + 10x super tele at 25/48/50 fps in Pro video'
+out = [title + ': SamsungCamera.apk (%s, md5 %s) -> md5 %s' % (build, stock, new),
        '# Adds ONLY UHD24 and FHD24 to te.f0.i in Lte/f0;-><clinit>() by replacing unused Fold/Flip slots',
-       '# (4000x1868 -> UHD24, 2224x1080 -> FHD24; 8K24 is already in te.f0.i). Leaves te.c0.c() stock so QHD stays hidden.',
-       '# Made by tools/cam24patch.py. Format: <zero-based file offset> <new byte in octal>']
+       '# (4000x1868 -> UHD24, 2224x1080 -> FHD24; 8K24 is already in te.f0.i). Leaves te.c0.c() stock so QHD stays hidden.']
+if done_profps:
+    out += ['# Unhides BACK_SECOND_TELE at 25/48/50 fps in Pro video in Led/g;.i: the 10x branch uses the',
+            '# same 8K-only check as the 3x (cd.a.h -> te.c0.S0), so it shows in those modes and stays hidden at 8K.']
+out += ['# Made by tools/cam24patch.py. Format: <zero-based file offset> <new byte in octal>']
 out += ['%d %o' % (i, b) for i, (a, b) in enumerate(zip(orig, apk)) if a != b]
 out_path = sys.argv[3] if len(sys.argv) > 3 else 'SamsungCamera-24fps-%s.patch' % build
 open(out_path, 'w', newline='\n').write('\n'.join(out) + '\n')
-print('stock md5  ', stock); print('patched md5', new); print(len(out) - 4, 'bytes changed')
+print('stock md5  ', stock); print('patched md5', new)
+print(sum(1 for a, b in zip(orig, apk) if a != b), 'bytes changed')

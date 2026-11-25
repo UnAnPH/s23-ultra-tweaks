@@ -368,10 +368,22 @@ const TWEAKS = [
   { id: "hdr2023", cat: "camera", name: "2023 ArcSoft HDR", desc: "The One UI 6 (2023) hybrid and bracketed HDR engines instead of today's. Ticking Camera leaves it out; pick it yourself (28 MB download)" },
   { id: "autoframe", cat: "camera", name: "4K auto framing", desc: "The S24's UHD setting for auto framing in video. Reported to make the camera fail on an S918B, so ticking Camera leaves it out" },
   { id: "tenbit", cat: "camera", name: "Front-camera 10-bit for apps", desc: "Any app (Camera2) can record 10-bit HDR (HLG10) video with the selfie cameras, as with the rear ones. Patches a copy of the phone's own camera driver; the first apply takes about 15 s longer" },
-  { id: "cam24fps", cat: "camera", name: "24 FPS in standard Video", desc: "Adds 24 fps to FHD (1080p), UHD (4K) and 8K in the standard Video resolution picker (patches a copy of Samsung Camera; no extra framework needed)" },
+  { id: "cam24fps", cat: "camera", name: "24 FPS in standard Video", desc: "Adds 24 fps to FHD (1080p), UHD (4K) and 8K in the standard Video picker, on the rear and front cameras (patches a copy of Samsung Camera; no extra framework needed)" },
+  { id: "wideflash", cat: "camera", name: "Flash on 0.6× ultrawide", desc: "Unlocks flash in Photo and torch in Video on the 0.6× ultrawide lens, plus its Camera Assistant toggle." },
+  { id: "prowbtint", cat: "camera", name: "White-balance tint in Pro", desc: "The Tint slider next to the colour temperature in Pro and Pro video's white balance" },
+  { id: "zoomrocker", cat: "camera", name: "Video zoom rocker", desc: "The smooth zoom rocker/slider in the standard Video mode" },
+  { id: "videosoftening", cat: "camera", name: "Video softening", desc: "Camera Assistant's Video softening (Off / Medium / High), which reduces over-sharpening in video" },
+  { id: "afcontrol", cat: "camera", name: "Autofocus speed and sensitivity", desc: "Camera Assistant's AF speed and AF sensitivity controls" },
+  { id: "aelimit", cat: "camera", name: "Auto exposure limit", desc: "Camera Assistant's Auto exposure limit, which caps how far the camera raises ISO or slows the shutter" },
+  { id: "slowmoaf", cat: "camera", name: "Touch focus in Slow motion", desc: "Tap the viewfinder to focus while recording a Slow motion video" },
+  { id: "extstorage", cat: "camera", name: "Record to USB-C storage", desc: "Records straight to a USB-C SSD or drive in every video mode (4K60, 4K60 21:9, 8K, FHD120)" },
+  { id: "anamorphic", cat: "camera", name: "Anamorphic desqueeze", desc: "Camera Assistant's anamorphic lens desqueeze (1.33× / 1.55× / 2.0×) for anamorphic lenses" },
+  { id: "profps", cat: "camera", name: "Extra Pro video frame rates", desc: "4K 25/48/50/100/120 (120 on the Wide and Ultrawide), FHD 25/48/50/100 and 8K 25 in Pro video, plus 21:9 Cinema 25/48/50/100/120; on a patched Samsung Camera (S918BXXUAGZIF) it also unhides the 10× super tele at 25/48/50 fps" },
+  { id: "slowmo4k120", cat: "camera", name: "4K120 in Slow motion", desc: "Adds 4K120 and FHD120 to Slow motion, and rebuilds the FHD240 entry so the Slow motion resolution list is complete (Log works with the Log video tweak on)" },
   { id: "display", cat: "display", name: "Full-screen AOD", desc: "The lock screen wallpaper on Always On Display, and AOD brightness that follows the room light" },
   { id: "colortone", cat: "display", name: "Adaptive color tone", desc: "Display colour follows the room light, as on the S24 (1 MB download)" },
   { id: "vulkan", cat: "display", name: "Vulkan rendering", desc: "Apps draw with Vulkan instead of OpenGL, as on the S24" },
+  { id: "weather", cat: "display", name: "Lock screen weather effect", desc: "Rain, snow, fog or sun animated over your lock screen wallpaper, following Samsung Weather. Brings back the Weather button in the lock screen editor (installs a 12 KB AI Core stub app; the AI-generated weather wallpapers stay off)" },
   { id: "galaxyai", cat: "ai", name: "Now Brief, Creative Studio, Call Assist", desc: "The S24's newer builds of these three Galaxy AI apps (219 MB download)" },
   { id: "audioeraser", cat: "ai", name: "Audio Eraser", desc: "Remove wind, noise, music or voices from videos in Gallery (34 MB download)" },
   { id: "settingssearch", cat: "ai", name: "Settings search", desc: "The S24's new Settings search bar; natural-language answers stay off (10 MB download)" },
@@ -382,13 +394,23 @@ const TWEAKS = [
   { id: "hideksu", cat: "system", name: "HideKSU", desc: "Hide the KernelSU root manager from apps, so root-aware apps (CRED, banking) stop crashing. The launcher icon and DFRoot's boot root keep working (patched services.jar; needs the KernelSU manager installed; 12 MB download). Also hides the module's own mounts from the apps you list in /data/adb/s23tweaks/hide-apps.txt, so mount-scanning detectors don't see the tweaks" },
   { id: "callrec", cat: "carrier", name: "Call recording", desc: "Call recording in the Samsung Phone app" },
   { id: "india", cat: "carrier", name: "India carrier config (Airtel, Jio)", desc: "For Indian SIMs: the Indian carrier settings with the Use 5G standalone networks switch, call recording, Smart IVR and message cards, plus Samsung Wallet India (UPI, DigiLocker, transit) and the 6 GHz hotspot — it reports the phone as the Indian model while on (reverts on reboot; the sales code on disk is untouched, adding bank cards may still fail)" },
+  { id: "dual5g", cat: "carrier", name: "Dual SIM 5G", desc: "5G standalone on both SIMs at once, instead of only the one set for mobile data. Adds your SIMs' country to the modem's 5G+5G list (Samsung allows it only in China and Costa Rica). This one stays after a reboot until you un-pick it; the original modem file is backed up first, to Download/s23tweaks-modem-backup. The modem restarts once (~15 s without signal)." },
   { id: "perfboost", cat: "custom", name: "Disable 2s launch CPU boost", desc: "Surgically disables One UI's 2-second all-core max-clock launch boost (0x00001081) while keeping One UI 9 WALT scheduler and 120 Hz tunings intact" },
   { id: "deepdoze", cat: "custom", name: "Faster Deep Doze & freezer", desc: "Applies faster Deep Doze timings, enables cached_apps_freezer, and trims parentalcare/hwresourceshare/dbsc from the system Doze whitelist (reversible)" },
   { id: "debloat", cat: "custom", name: "Suppress telemetry & GOS", desc: "Disables Game Optimizing Service (GOS), DiagMonAgent, DeviceQualityAgent, and Rubin Customization Service (reversible)" },
   { id: "extrafeatures", cat: "custom", name: "Extra One UI 9 system & audio features", desc: "Adds Enhanced Processing, Pass-Through/Wireless Night Mode, Touch Fast Response, PhotoHDR/SuperHDR/AI Upscaler, SoundAlive voice_boost, and scan/profiler props" },
-  { id: "extracam", cat: "custom", name: "Extra One UI 9 camera AI/AF flags", desc: "Enables AF sensitivity/tracking/speed, slow-mo AF, motion photo auto-trim, and AI ISP/cinematic portrait video floating features" },
+  { id: "extracam", cat: "custom", name: "Extra One UI 9 camera AI/AF flags", desc: "Enables AF smart tracking, motion photo auto-trim, and AI ISP/cinematic/editable portrait video floating features (non-upstream tags)" },
   { id: "vulkangpu", cat: "custom", name: "Vulkan GL preload disable", desc: "Sets ro.zygote.disable_gl_preload=1 as a companion to Vulkan rendering so zygote skips preloading unused OpenGL state" },
 ];
+// Camera Tweaks: the camera features added in this fork, shown as one option. The tweaks stay
+// independent in tweaks.sh and in the saved picks; the page only groups them.
+const BUNDLES = [
+  { id: "cameratweaks", cat: "camera", name: "Camera Tweaks",
+    ids: ["cam24fps", "wideflash", "prowbtint", "zoomrocker", "videosoftening", "afcontrol", "aelimit", "slowmoaf", "extstorage", "anamorphic", "profps", "slowmo4k120"],
+    desc: "Everything we added to the camera, in one switch: 24 FPS in Video (rear and front), flash and torch on the 0.6× ultrawide, white-balance tint, Video zoom rocker, 4K120 in Slow motion, Camera Assistant's video softening, AF speed/sensitivity, auto exposure limit and anamorphic desqueeze, touch focus in Slow motion, USB-C recording and the extra Pro video rates (4K 120, 21:9 Cinema, up to 8K 25, and the 10× at 25/48/50 on the patched Camera)." },
+];
+const BUNDLE_OF = {};
+for (const b of BUNDLES) for (const id of b.ids) BUNDLE_OF[id] = b;
 const NAME = Object.fromEntries(TWEAKS.map(t => [t.id, t.name]));
 const IDS = TWEAKS.map(t => t.id);
 
@@ -397,6 +419,7 @@ const WHERE = {
   battery: ["Battery health", "Settings → Battery → Battery information."],
   features: ["Power schedule", "Search Settings for “power on/off” to find the schedule. Louder VoIP calls need no setting."],
   callrec: ["Call recording", "Phone app → Settings → Record calls."],
+  dual5g: ["Dual SIM 5G", "Both SIMs can now sit on 5G standalone at the same time. Whether each one shows 5G still depends on its coverage. To undo, un-pick it and apply: the original modem file goes back."],
   india: ["5G standalone and call recording", "Settings → Connections → Mobile networks → Use 5G standalone networks; Phone app → Settings → Record calls."],
   hotspot6g: ["6 GHz hotspot", "Settings → Connections → Mobile Hotspot → Band → 6 GHz (security WPA3)."],
   wifi7: ["Wi-Fi 7", "Multi-link needs a Wi-Fi 7 router with MLO on. The Wi-Fi 7 mode page is under Status."],
@@ -411,10 +434,20 @@ const WHERE = {
   hdr2023: ["2023 ArcSoft HDR", "Nothing to set. Bracketed HDR (backlit scenes) is tested; hybrid HDR (ordinary daylight) loads but is untested. If photos look wrong, turn it off."],
   tenbit: ["Front-camera 10-bit", "Nothing to set. Apps that offer 10-bit or HDR video (HLG) now offer it on the selfie camera too; Samsung Camera already had its own."],
   cam24fps: ["24 FPS in standard Video", "Camera → Video → tap resolution/FPS at the top → select FHD, UHD or 8K and 24."],
+  wideflash: ["Flash on ultrawide", "Camera → Photo: flash on; Video: torch on. Camera Assistant now shows the ultrawide flash option."],
+  cameratweaks: ["Camera Tweaks", "24 fps: Camera → Video → resolution/FPS. Ultrawide flash: Photo flash / Video torch. Tint: Pro or Pro video → white balance. Zoom rocker: Video zoom. 4K120: Slow motion → 4K120 (Log needs the Log video tweak). Camera Assistant: video softening, AF speed/sensitivity, auto exposure limit and anamorphic desqueeze. Touch focus: Slow motion. USB-C: Camera → Settings → Storage. Pro rates: Camera → More → Pro video."],
+  videosoftening: ["Video softening", "Camera → Settings → Camera Assistant → Video softening (Off / Medium / High)."],
+  afcontrol: ["Autofocus controls", "Camera → Settings → Camera Assistant → AF speed and AF sensitivity."],
+  aelimit: ["Auto exposure limit", "Camera → Settings → Camera Assistant → Auto exposure limit."],
+  slowmoaf: ["Focus in Slow motion", "Camera → Slow motion → tap the viewfinder to focus while recording."],
+  extstorage: ["USB-C recording", "Plug an exFAT USB-C SSD or drive, then Camera → Settings → Storage → USB storage; recording works in every video mode."],
+  anamorphic: ["Anamorphic desqueeze", "Camera → Settings → Camera Assistant → Anamorphic lens desqueeze."],
+  profps: ["Pro video frame rates", "Camera → More → Pro video → resolution/FPS: 4K 25/48/50/100/120 (120 on the Wide and Ultrawide), FHD 25/48/50/100, 8K 25, and 21:9 Cinema 25/48/50/100/120. The 10× tele appears at 25/48/50 on S918BXXUAGZIF with the patched Camera APK; on other firmwares it stays hidden."],
   autoframe: ["4K auto framing", "Reported to make the camera fail (S918B). Video at UHD with Auto framing on; turn it off if the camera fails to open."],
   settingssearch: ["Settings search", "Open Settings and tap the search bar."],
   callscreen: ["Call screening", "Phone → Settings → Call screening. On the S23 the AI summary shows an error; screening and voice messages work."],
   bargein: ["Bixby barge-in", "Untested: start talking while Bixby is answering."],
+  weather: ["Lock screen weather effect", "Wallpaper and style → Lock screen → Weather → Done. It animates only when the weather has rain, snow, fog or daytime sun; cloudy or clear nights show nothing."],
   perfboost: ["Launch boost disabled", "Nothing to set; perf-hal-2-3 reloaded without the 2s all-core max-clock boost."],
   deepdoze: ["Faster Deep Doze", "Nothing to set; Deep Doze, cached_apps_freezer, and system Doze whitelist trim are active."],
   debloat: ["Telemetry & GOS suppressed", "Nothing to set; GOS, DiagMonAgent, DQAgent, and Rubin are disabled until unpicked."],
@@ -444,7 +477,15 @@ function toast(msg) {
   try { if (window.ksu && typeof ksu.toast === "function") { ksu.toast(String(msg)); return; } } catch (e) { /* fall through */ }
 }
 function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
-function namesOf(ids) { return ids.map(i => NAME[i] || i).join(", "); }
+function namesOf(ids) {
+  const out = [], seen = new Set();
+  for (const i of ids) {
+    const b = BUNDLE_OF[i];
+    if (b) { if (seen.has(b.id)) continue; seen.add(b.id); out.push(b.name); }
+    else out.push(NAME[i] || i);
+  }
+  return out.join(", ");
+}
 function validIds(ids) { return ids.filter(i => IDS.includes(i)); }
 
 /* ---------------- ksu.exec wrapper ---------------- */
@@ -608,6 +649,9 @@ function initialSelection(p) {
   if (!ids.length) ids = IDS.filter(i => autoPick(i) && available(i));
   ids = ids.filter(available);
   const s = new Set(ids);
+  // a bundle is all-or-nothing: an old saved pick with any member gets the whole bundle
+  // (so a newly added tweak such as slowmo4k120 is not left out after a module update)
+  for (const b of BUNDLES) if (b.ids.some(i => s.has(i))) for (const i of b.ids) if (available(i)) s.add(i);
   if (s.has("wifi7")) { if (available("airdrop")) s.add("airdrop"); else s.delete("wifi7"); }
   if (s.has("india")) s.delete("callrec");
   return s;
@@ -631,6 +675,43 @@ function updateCats() {
     cb.indeterminate = n > 0 && !cb.checked;
     $("cat-n-" + c.id).textContent = n + " of " + all.length;
   }
+  updateBundles();
+}
+
+/* A bundle is one row that stands for several tweaks. The tweaks stay independent in tweaks.sh
+   and in the saved picks; the row just adds or removes all of them. */
+function bundleAvailable(b) { return b.ids.filter(i => available(i)); }
+function bundleState(b) {
+  const ids = bundleAvailable(b), on = ids.filter(i => S.sel.has(i));
+  return { ids, all: ids.length > 0 && on.length === ids.length, some: on.length > 0, anyActive: b.ids.some(i => tweakInfo(i).active) };
+}
+function updateBundles() {
+  for (const b of BUNDLES) {
+    const cb = $("tw-" + b.id); if (!cb) continue;
+    const st = bundleState(b);
+    cb.checked = st.all; cb.indeterminate = st.some && !st.all;
+  }
+}
+function onBundle(b, on) {
+  for (const id of b.ids) {
+    if (on && !available(id)) continue;
+    if (S.sel.has(id) === on) continue;
+    on ? S.sel.add(id) : S.sel.delete(id);
+    const cb = $("tw-" + id); if (cb) cb.checked = on;
+  }
+  updateCats(); updateApply();
+}
+function bundleRow(b) {
+  const st = bundleState(b);
+  const cb = h("input", { type: "checkbox", id: "tw-" + b.id, disabled: !st.ids.length,
+    onchange: e => onBundle(b, e.target.checked) });
+  cb.checked = st.all; cb.indeterminate = st.some && !st.all;
+  return h("label", { class: "tweak" + (st.ids.length ? "" : " off"), for: "tw-" + b.id },
+    cb,
+    h("div", { class: "tx" },
+      h("div", { class: "name" }, h("span", { text: b.name }), st.anyActive ? h("span", { class: "badge", text: "Active" }) : null),
+      h("div", { class: "desc", text: b.desc }),
+      !st.ids.length ? h("div", { class: "why", text: "Not available: this firmware's camera-feature.xml can't be edited" }) : null));
 }
 function onCat(cat, on) {
   for (const id of on ? catIds(cat, true) : catIds(cat, false)) { if (S.sel.has(id) !== on) onPick(id, on, true); }
@@ -644,7 +725,13 @@ function renderTweaks() {
       "aria-label": "All of " + c.name, onchange: e => onCat(c.id, e.target.checked) });
     box.append(h("label", { class: "cat" + (picks.length ? "" : " off"), for: "cat-" + c.id },
       cb, h("span", { text: c.name }), h("span", { class: "count", id: "cat-n-" + c.id })));
+    const bundled = new Set();
   for (const t of TWEAKS.filter(x => x.cat === c.id)) {
+    const b = BUNDLE_OF[t.id];
+    if (b) {
+      if (!bundled.has(b.id)) { bundled.add(b.id); box.append(bundleRow(b)); }
+      continue;
+    }
     const info = tweakInfo(t.id);
     const cb = h("input", { type: "checkbox", id: "tw-" + t.id, "aria-describedby": "tw-d-" + t.id,
       disabled: !info.available, onchange: e => onPick(t.id, e.target.checked) });
@@ -679,8 +766,18 @@ function onPick(id, on, quiet) {
   updateCats(); updateApply();
 }
 function selectedIds() { return IDS.filter(i => S.sel.has(i)); }
+// A bundle counts as one selection in the button, even though it sends its individual IDs.
+function selectionCount() {
+  let n = 0; const seenB = new Set();
+  for (const id of selectedIds()) {
+    const b = BUNDLE_OF[id];
+    if (b) { if (seenB.has(b.id)) continue; seenB.add(b.id); }
+    n++;
+  }
+  return n;
+}
 function updateApply() {
-  const n = selectedIds().length, b = $("apply");
+  const n = selectionCount(), b = $("apply");
   b.disabled = n === 0 || S.busy;
   b.textContent = n ? "Apply " + n + (n === 1 ? " tweak" : " tweaks") : "Pick at least one tweak";
 }
@@ -697,8 +794,18 @@ function renderAutostart() {
 function renderStatus() {
   const ul = $("active-list"); ul.textContent = "";
   const act = (S.probe.tweaks || []).filter(t => t.active).map(t => t.id);
+  const seenB = new Set();
   if (!act.length) ul.append(h("li", { class: "muted", text: "Nothing is active right now." }));
-  else for (const id of act) ul.append(h("li", {}, h("span", { class: "dot", "aria-hidden": "true" }), h("span", { text: NAME[id] || id })));
+  else for (const id of act) {
+    const b = BUNDLE_OF[id];
+    if (b) {
+      if (seenB.has(b.id)) continue;
+      seenB.add(b.id);
+      ul.append(h("li", {}, h("span", { class: "dot", "aria-hidden": "true" }), h("span", { text: b.name })));
+      continue;
+    }
+    ul.append(h("li", {}, h("span", { class: "dot", "aria-hidden": "true" }), h("span", { text: NAME[id] || id })));
+  }
   if (S.probe.module === false) ul.append(h("li", { class: "muted small", text: "Running from install.sh's copy, not the module." }));
 }
 
@@ -709,11 +816,16 @@ function showMain() {
 
 /* ---------------- result banner (survives the WebView being killed) ---------------- */
 function whereList(ids) {
-  const seen = new Set(), items = [];
-  for (const id of ids) {
-    const w = WHERE[id]; if (!w) continue;
-    const key = w[1]; if (seen.has(key)) continue; seen.add(key);
+  const seen = new Set(), seenB = new Set(), items = [];
+  const add = w => {
+    if (!w) return;
+    const key = w[1]; if (seen.has(key)) return; seen.add(key);
     items.push(h("li", {}, h("strong", { text: w[0] + ": " }), w[1]));
+  };
+  for (const id of ids) {
+    const b = BUNDLE_OF[id];
+    if (b) { if (seenB.has(b.id)) continue; seenB.add(b.id); add(WHERE[b.id]); continue; }
+    add(WHERE[id]);
   }
   return items.length ? h("ul", {}, items) : null;
 }
@@ -1017,6 +1129,7 @@ function installMock() {
     }
     if (has("battery")) add(0.5, "battery: auth IC presented");
     if (has("battery") || has("features")) add(0.4, "feature flags on: " + (has("battery") ? "BATTERY_SUPPORT_BSOH_SETTINGS " : "") + (has("features") ? "SETTINGS_SUPPORT_AUTO_POWER_ON_OFF AUDIO_SUPPORT_VOIP_SOUND_LOUDER" : ""));
+    if (has("dual5g")) { add(0.6, "dual5g: original modem file backed up to /data/adb/s23tweaks/dual5g/stock and /sdcard/Download/s23tweaks-modem-backup"); add(0.4, "dual5g: msim_plmns is now 460-* 712-* 404-* 405-* 406-*"); add(0.3, "dual5g: restarting the modem so it reads the new setting (no signal for ~15 s)"); add(14, "dual5g: modem back up"); }
     if (has("india")) { add(0.5, "india: INS carrier config on (sales code stays XAC on disk)"); add(0.4, "india: device reported as SM-S918B / INS, country IN (Samsung Wallet India + 6 GHz hotspot)"); }
     else if (has("callrec")) add(0.5, "callrec: call recording on in XAC's carrier config (Phone app > Settings > Record calls)");
     if (fail) { add(0.4, "restarting the Android framework (screen goes black for ~30 s)"); add(2.0, "FAILED: something went wrong in the mock (framework did not come back)"); return out; }
@@ -1029,9 +1142,22 @@ function installMock() {
     if (has("galaxyai")) add(0.4, "galaxyai: S24 Now Brief (Personal Data Intelligence), Creative Studio and Call Assist on");
     if (has("tenbit")) add(1.2, "tenbit: front cameras offer 10-bit HDR (HLG10) video to apps");
     if (has("cam24fps")) add(0.4, "cam24fps: 24 FPS in standard Video on (Camera > Video > UHD 24)");
+    if (has("wideflash")) add(0.2, "wideflash: flash in Photo and torch in Video on the 0.6× ultrawide");
+    if (has("prowbtint")) add(0.2, "prowbtint: white-balance Tint slider on (Pro and Pro video)");
+    if (has("zoomrocker")) add(0.2, "zoomrocker: Video zoom rocker on");
+    if (has("videosoftening")) add(0.3, "videosoftening: Camera Assistant > Video softening on");
+    if (has("afcontrol")) add(0.3, "afcontrol: Camera Assistant > AF speed and sensitivity on");
+    if (has("aelimit")) add(0.3, "aelimit: Camera Assistant > Auto exposure limit on");
+    if (has("slowmoaf")) add(0.3, "slowmoaf: touch focus while recording Slow motion on");
+    if (has("extstorage")) add(0.2, "extstorage: USB-C storage enabled in every video resolution");
+    if (has("anamorphic")) add(0.3, "anamorphic: Camera Assistant > anamorphic lens desqueeze on");
+    if (has("profps")) add(0.3, "profps: extra Pro video frame rates on (4K 25/48/50, FHD 25/48/50/100, 8K 25)");
+    if (has("slowmo4k120")) add(0.3, "slowmo4k120: 4K120 and FHD120 in Slow motion on, FHD240 menu entry rebuilt");
     if (has("vulkan")) add(0.3, "vulkan: apps render with Skia on Vulkan");
-    if (["airdrop", "battery", "features", "callrec", "india", "display", "logvideo", "vulkan", "camerahdr", "hdr2023", "audioeraser", "colortone", "galaxyai"].some(has)) { add(0.4, "restarting the Android framework (screen goes black for ~30 s)"); add(3.0, "framework back"); }
+    if (has("weather")) add(0.3, "feature flags on: LOCKSCREEN_CONFIG_WALLPAPER_STYLE");
+    if (["airdrop", "battery", "features", "callrec", "india", "display", "logvideo", "vulkan", "camerahdr", "hdr2023", "audioeraser", "colortone", "galaxyai", "weather", "wideflash", "prowbtint", "zoomrocker", "videosoftening", "afcontrol", "aelimit", "slowmoaf", "extstorage", "anamorphic", "profps", "slowmo4k120"].some(has)) { add(0.4, "restarting the Android framework (screen goes black for ~30 s)"); add(3.0, "framework back"); }
     if (has("hotspot6g")) add(0.5, "hotspot6g: Mobile hotspot > Band now offers 6 GHz (needs WPA3); country unchanged, Samsung Wallet unaffected");
+    if (has("weather")) add(0.6, "weather: on; pick it in the lock screen editor (Wallpaper and style > Lock screen > Weather)");
     if (has("airdrop")) { add(0.4, "airdrop: mosey_server running"); add(0.4, "airdrop: Play services Nearby flags on (2 of 2 overrides present)"); }
     add(0.2, "on: " + ids.join(" "));
     add(0.4, "DONE");
@@ -1062,7 +1188,7 @@ function installMock() {
     return JSON.stringify({ version: "v1.1.0", module: true,
       phone: { model: "SM-S918W", firmware: "S918WVLU8GZIF", csc: "XAC", android: "17", kernel: "5.15.197-android13-8-34343818-abS918WVLU8GZIF", gms: 264531035, sim: new URLSearchParams(location.search).get("sim") || "40445" },
       picked: st.picked, autostart: st.autostart, applying: !!st.run,
-      tweaks: [tw("airdrop"), tw("battery"), tw("features"), tw("callrec"), tw("india"), tw("hotspot6g"), tw("wifi7", w7 ? "" : "needs firmware S918WVLU8GZIF (this phone runs S918WVLU7GZE1)"), tw("display"), tw("logvideo"), tw("vulkan"), tw("camerahdr"), tw("hdr2023"), tw("audioeraser"), tw("colortone"), tw("galaxyai"), tw("camextras"), tw("autoframe"), tw("settingssearch"), tw("bargein"), tw("tenbit"), tw("cam24fps"), tw("callscreen", "needs the Language Core 4.0.01.24 APK (3.1 GB) in /data/adb/s23tweaks/dl/languagecore-4.0.01.24.apk; see the README")] });
+      tweaks: [tw("airdrop"), tw("battery"), tw("features"), tw("callrec"), tw("india"), tw("hotspot6g"), tw("wifi7", w7 ? "" : "needs firmware S918WVLU8GZIF (this phone runs S918WVLU7GZE1)"), tw("display"), tw("logvideo"), tw("vulkan"), tw("camerahdr"), tw("hdr2023"), tw("audioeraser"), tw("colortone"), tw("galaxyai"), tw("camextras"), tw("autoframe"), tw("settingssearch"), tw("bargein"), tw("tenbit"), tw("cam24fps"), tw("weather"), tw("wideflash"), tw("prowbtint"), tw("zoomrocker"), tw("videosoftening"), tw("afcontrol"), tw("aelimit"), tw("slowmoaf"), tw("extstorage"), tw("anamorphic"), tw("profps"), tw("slowmo4k120"), tw("callscreen", "needs the Language Core 4.0.01.24 APK (3.1 GB) in /data/adb/s23tweaks/dl/languagecore-4.0.01.24.apk; see the README"), tw("dual5g")] });
   }
   function handle(cmd) {
     tick();

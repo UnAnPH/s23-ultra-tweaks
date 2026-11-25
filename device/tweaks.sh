@@ -20,15 +20,22 @@
 #   loop | guard      (internal) keep mosey_server running / reboot cleanly on a Wi-Fi firmware crash
 # Tweaks: airdrop battery features callrec india hotspot6g wifi7 display logvideo vulkan
 #         camerahdr hdr2023 audioeraser colortone galaxyai camextras autoframe settingssearch bargein
-#         callscreen tenbit hideksu cam24fps  (see README.md; the categories they're grouped in are in install.sh and the WebUI)
+#         callscreen tenbit hideksu cam24fps weather wideflash
+#         prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage
+#         anamorphic profps slowmo4k120 dual5g  (see README.md; the categories they're grouped in are in install.sh and the WebUI)
 #
 # Nothing here writes to a partition. Every change is a module load, an overlay, a bind mount or a
 # runtime setting, so a reboot always returns the phone to stock. The files themselves stay on storage
 # (/data/adb/s23tweaks), not in RAM: the kernel won't build an overlay from /data, so each overlay holds
 # only empty placeholders in tmpfs and the real file is bind-mounted over its placeholder (pbind). The one exception is
 # the airdrop tweak's Play services flag overrides, stored in Play services' own database
-# (harmless without the rest; "unflag" removes them), camextras' camera app setting, and callscreen,
-# which installs Samsung Language Core as an ordinary app (undo: pm uninstall <package>).
+# (harmless without the rest; "unflag" removes them), camextras' camera app setting, callscreen,
+# which installs Samsung Language Core as an ordinary app (undo: pm uninstall <package>), and weather,
+# which installs a 12 KB AI Core stub app and turns Samsung's live wallpaper app back on if it was off.
+# dual5g is the one change inside the modem: it edits one policy file in the modem's own storage (EFS),
+# which stays across reboots and module removal until it's put back. The original is backed up before
+# the first write (state folder and Download/s23tweaks-modem-backup); un-picking dual5g, removing the
+# module, or "dual5g-restore" puts it back.
 # Never touched: the sales code (mps_code.dat, sales_code.dat, omc.info, persist.sys.matched_code).
 # Changing those can factory-reset the phone.
 
@@ -40,7 +47,7 @@ mkdir -p $V; L=$V/tweaks.log; R=$V/run
 [ -f $D/module.prop ] && MODULE=1 || MODULE=0
 APPLY_LOCK=/dev/s23tweaks_apply.lock         # /dev is tmpfs: locks never survive a reboot
 STAYS_TILL_REBOOT="airdrop wifi7 battery india callrec vulkan vulkangpu audioeraser hdr2023 colortone tenbit galaxyai settingssearch hideksu cam24fps"
-TWEAK_IDS="airdrop battery features callrec india hotspot6g wifi7 display logvideo vulkan camerahdr hdr2023 audioeraser colortone galaxyai camextras autoframe settingssearch bargein callscreen tenbit hideksu cam24fps perfboost deepdoze debloat extrafeatures extracam vulkangpu"
+TWEAK_IDS="airdrop battery features callrec india hotspot6g wifi7 display logvideo vulkan camerahdr hdr2023 audioeraser colortone galaxyai camextras autoframe settingssearch bargein callscreen tenbit hideksu cam24fps weather wideflash prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage anamorphic profps slowmo4k120 dual5g perfboost deepdoze debloat extrafeatures extracam vulkangpu"
 GMS_MIN=261125000                            # Play services 26.11, the first with Mosey support
 # Firmware the AirDrop/Wi-Fi 7 kernel modules are checked against (one line each, read by customize.sh).
 # All are One UI 9 build GZIF on GKI kernel 34343818, and their whole Wi-Fi stack (cnss2, mhi, cfg80211,
@@ -57,6 +64,13 @@ kernel_override() {
   case " $AIRDROP_FW " in *" $(getprop ro.build.PDA) "*) return 0 ;; esac; return 1
 }
 kernel_supported() { kernel_stock || kernel_override; }
+# A custom kernel that ships its own Wi-Fi stack (cfg80211.ko built for that kernel, not the stock GKI one)
+# lays out cfg80211's structures differently. The S24 driver's modules still load, but wiphy_new/
+# wiphy_register reject it (WARNs at core.c:431/772, err -5) and the phone froze during the driver swap
+# (issue #21). The stock module's vermagic names the GKI build the airdrop modules are made for.
+CFG80211_KO=/vendor_dlkm/lib/modules/cfg80211.ko
+cfg80211_vermagic() { grep -a -o -m1 'vermagic=[^ ]*' $CFG80211_KO 2>/dev/null | head -n 1 | cut -d= -f2; }
+cfg80211_stock() { case "$(cfg80211_vermagic)" in "$AIRDROP_KBASE"*) return 0 ;; esac; return 1; }
 STOCK_KO=/vendor_dlkm/lib/modules/qca_cld3_kiwi_v2.ko
 FF=/system/etc/floating_feature.xml
 CF=/system/cameradata/camera-feature.xml
@@ -107,10 +121,12 @@ CAM_APK=/system/priv-app/SamsungCamera/SamsungCamera.apk
 # cam24fps, keyed on the Camera APK itself, not the firmware: md5 of a stock SamsungCamera.apk, md5 once
 # patched, the patch in files/, and the firmware it came from. Any firmware whose stock Camera APK is listed
 # works; tools/cam24patch.py makes the patch and prints both md5s for another APK.
-CAMERA_24FPS="174e38e111f53c92eea54fd8b9a8c1c6 167b412279d4fd5f3ce7e89232725bc8 SamsungCamera-24fps-17.0.00.43.patch S918BXXUAGZIF
+CAMERA_24FPS="174e38e111f53c92eea54fd8b9a8c1c6 b22942b22ec14896bc02277d319b7623 SamsungCamera-24fps-S918BXXUAGZIF.patch S918BXXUAGZIF
 e7c89df10d6607ea1ddeedceee961903 650dc854741a92f54be455fc19cd4c89 SamsungCamera-24fps-17.0.00.43.patch S918WVLU8GZIF"
 # the row for the Camera APK in place now (stock, or our patched copy bound over it)
 cam24_row() { m=$(md5sum $CAM_APK 2>/dev/null | cut -d' ' -f1); echo "$CAMERA_24FPS" | awk -v m="$m" '$1 == m || $2 == m'; }
+# the bound Camera APK is one whose patch also unhides the 10x (the patch header says so)
+cam24_profps_on() { bound $CAM_APK || return 1; set -- $(cam24_row); [ -n "$1" ] && grep -q BACK_SECOND_TELE $D/files/$3 2>/dev/null; }
 cam24_builds() { echo "$CAMERA_24FPS" | awk '{print $4}' | tr '\n' ' ' | sed 's/ $//; s/ / or /g'; }
 # Carrier config (callrec, india), on any sales code. SemCscFeature reads <mdc.system.path>/cscfeature.xml
 # (on multi-country firmware also that file's FeatureSet for the CSC country); customer_carrier_feature.json
@@ -468,13 +484,53 @@ ff_apply() {
 #            Log). Not SUPPORT_PREVIEW_LUT: the LUT preview is drawn by the S24 camera HAL (its
 #            LogConverter uniplugin); the S23 HAL has none, and the LUT button crashed the camera.
 #  camextras: Super steady's horizontal lock (a third Super steady option; hlock_apply makes it level)
+#  wideflash: the flash in Photo and the torch in Video on the 0.6x ultrawide, and Camera Assistant's
+#             matching wide-flash option. Both are switches in camera-feature.xml; no APK or HAL patch.
+#  prowbtint: the Tint slider next to the colour temperature in Pro and Pro video's white balance.
+#  zoomrocker: the smooth zoom rocker/slider in the standard Video mode.
+#  slowmoaf: tap-to-focus while recording in Slow motion (its Camera Assistant flag is set in apply).
+#  extstorage: recording straight to a USB-C SSD/drive, in every video mode (camfeat_apply flips
+#              external-storage-support="false" to "true" on the resolution map lines).
+#  anamorphic: Camera Assistant's anamorphic lens desqueeze (1.33x / 1.55x / 2.0x).
+#  profps: extra Pro video frame rates: 4K 25/48/50, FHD 25/48/50/100 and 8K 25. The 10x tele
+#          stays hidden in these modes unless the Camera APK patch is bound (cam24fps/profps).
+#  slowmo4k120: 4K120 and FHD120 in Slow motion (slow_motion added to their modes), and the
+#          FHD240 entry rebuilt for the Slow motion menu so the resolution list is complete.
 # Never add SUPPORT_BACK_WIDE_NORMAL_DUAL_PORTRAIT_VIDEO, SUPPORT_BACK_PORTRAIT_VIDEO_TELE_DUAL or
 # CAMERA_SUPPORT_SEAMLESS_PORTRAITVIDEO: on the S23 they crash the camera ("Zoom is not supported").
 CF_LOG='<local name="SUPPORT_LOG_VIDEO" value="true"/>'
 CF_HLOCK='<local name="SUPPORT_SUPER_STEADY_HORIZONTAL_LOCK" value="true"/>'
-cf_add=""
+CF_WIDEFLASH='<local name="SUPPORT_FLASH_IN_WIDE_LENS" value="true"/>'
+CF_WIDEFLASH_CA='<local name="SUPPORT_CAMERA_ASSISTANT_WIDE_FLASH_MENU" value="true"/>'
+CF_PROWBTINT='<local name="SUPPORT_PRO_WHITE_BALANCE_TINT" value="true"/>'
+CF_ZOOMROCKER='<local name="SUPPORT_VIDEO_MODE_ZOOM_ROCKER" value="true"/>'
+CF_SLOWMOAF='<local name="SUPPORT_SLOW_MOTION_AF_DURING_RECORDING" value="true"/>'
+CF_ANAMORPHIC='<local name="SUPPORT_CAMERA_ASSISTANT_ANAMORPHIC_LENS" value="true"/>'
+CF_ANAMORPHIC_SCALER='<local name="SUPPORT_CAMERA_ASSISTANT_ANAMORPHIC_LENS_HW_SCALER" value="true"/>'
+CF_SM_240FPS='<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_240FPS" value="true" hdr="true" hdr10="false" snapshot-support="false" snapshot-size="4000x2252" vdis="false" super-vdis="false" effect="false" object-tracking="false" seamless-zoom-support="false" physical-zoom-supported="false" external-storage-support="true" supported-mode="slow_motion"/>'
+CF_PROFPS='<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_25FPS" value="true" hdr="true" hdr10="true" snapshot-support="true" snapshot-size="4000x2252" vdis="true" super-vdis="false" effect="false" object-tracking="true" seamless-zoom-support="true" physical-zoom-supported="false" external-storage-support="true" touch-af="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_48FPS" value="true" hdr="true" hdr10="true" snapshot-support="true" snapshot-size="4000x2252" vdis="true" super-vdis="false" effect="false" object-tracking="true" seamless-zoom-support="false" physical-zoom-supported="true" external-storage-support="true" touch-af="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_50FPS" value="true" hdr="true" hdr10="true" snapshot-support="true" snapshot-size="4000x2252" vdis="true" super-vdis="false" effect="false" object-tracking="true" seamless-zoom-support="false" physical-zoom-supported="true" external-storage-support="true" touch-af="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_25FPS" value="true" hdr="true" hdr10="true" snapshot-support="true" snapshot-size="4000x2252" vdis="true" super-vdis="true" effect="true" object-tracking="true" seamless-zoom-support="true" physical-zoom-supported="false" external-storage-support="true" touch-af="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_48FPS" value="true" hdr="true" hdr10="true" snapshot-support="true" snapshot-size="4000x2252" vdis="true" super-vdis="true" effect="true" object-tracking="true" seamless-zoom-support="true" physical-zoom-supported="false" external-storage-support="true" touch-af="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_50FPS" value="true" hdr="true" hdr10="true" snapshot-support="true" snapshot-size="4000x2252" vdis="true" super-vdis="true" effect="true" object-tracking="true" seamless-zoom-support="true" physical-zoom-supported="false" external-storage-support="true" touch-af="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_100FPS" value="true" hdr="true" hdr10="false" snapshot-support="false" snapshot-size="4000x2252" vdis="false" super-vdis="false" effect="false" object-tracking="false" seamless-zoom-support="false" physical-zoom-supported="false" external-storage-support="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_7680X4320_25FPS" value="true" hdr="true" hdr10="false" snapshot-support="true" snapshot-size="4000x2252" vdis="true" super-vdis="false" effect="false" object-tracking="false" seamless-zoom-support="false" physical-zoom-supported="false" external-storage-support="true" touch-af="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_120FPS" value="true" hdr="true" hdr10="false" snapshot-support="false" snapshot-size="4000x2252" vdis="false" super-vdis="false" effect="false" object-tracking="false" seamless-zoom-support="false" physical-zoom-supported="false" external-storage-support="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_100FPS" value="true" hdr="true" hdr10="false" snapshot-support="false" snapshot-size="4000x2252" vdis="false" super-vdis="false" effect="false" object-tracking="false" seamless-zoom-support="false" physical-zoom-supported="false" external-storage-support="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X1644_25FPS" value="true" hdr="true" hdr10="true" snapshot-support="true" snapshot-size="4000x1716" vdis="true" super-vdis="false" effect="false" object-tracking="true" seamless-zoom-support="true" physical-zoom-supported="false" external-storage-support="true" touch-af="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X1644_48FPS" value="true" hdr="true" hdr10="true" snapshot-support="true" snapshot-size="4000x1716" vdis="true" super-vdis="false" effect="false" object-tracking="true" seamless-zoom-support="false" physical-zoom-supported="true" external-storage-support="true" touch-af="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X1644_50FPS" value="true" hdr="true" hdr10="true" snapshot-support="true" snapshot-size="4000x1716" vdis="true" super-vdis="false" effect="false" object-tracking="true" seamless-zoom-support="false" physical-zoom-supported="true" external-storage-support="true" touch-af="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X1644_100FPS" value="true" hdr="true" hdr10="false" snapshot-support="false" snapshot-size="4000x1716" vdis="false" super-vdis="false" effect="false" object-tracking="false" seamless-zoom-support="false" physical-zoom-supported="false" external-storage-support="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X1644_120FPS" value="true" hdr="true" hdr10="false" snapshot-support="false" snapshot-size="4000x1716" vdis="false" super-vdis="false" effect="false" object-tracking="false" seamless-zoom-support="false" physical-zoom-supported="false" external-storage-support="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X824_25FPS" value="true" hdr="true" hdr10="true" snapshot-support="true" snapshot-size="4000x1716" vdis="true" super-vdis="false" effect="true" object-tracking="true" seamless-zoom-support="true" physical-zoom-supported="false" external-storage-support="true" touch-af="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X824_48FPS" value="true" hdr="true" hdr10="true" snapshot-support="true" snapshot-size="4000x1716" vdis="true" super-vdis="false" effect="true" object-tracking="true" seamless-zoom-support="true" physical-zoom-supported="false" external-storage-support="true" touch-af="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X824_50FPS" value="true" hdr="true" hdr10="true" snapshot-support="true" snapshot-size="4000x1716" vdis="true" super-vdis="false" effect="true" object-tracking="true" seamless-zoom-support="true" physical-zoom-supported="false" external-storage-support="true" touch-af="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X824_100FPS" value="true" hdr="true" hdr10="false" snapshot-support="false" snapshot-size="4000x1716" vdis="false" super-vdis="false" effect="false" object-tracking="false" seamless-zoom-support="false" physical-zoom-supported="false" external-storage-support="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_7680X3296_25FPS" value="true" hdr="true" hdr10="false" snapshot-support="true" snapshot-size="4000x1716" vdis="true" super-vdis="false" effect="false" object-tracking="false" seamless-zoom-support="false" physical-zoom-supported="false" external-storage-support="true" supported-mode="pro_video"/>'
+cf_add=""; cf_slowmo_modes=""
 camfeat_apply() {
-  [ -n "$cf_add" ] || [ -n "${cf_video_modes:-}" ] || return 1
+  [ -n "$cf_add" ] || [ -n "${cf_video_modes:-}" ] || [ -n "${cf_slowmo_modes:-}" ] || has extstorage || return 1
   mkdir -p $R; bound $CF && umount $CF
   grep -q '</resources>' $CF || { log "camera: $CF has no </resources>; camera settings skipped"; return 1; }
   grep -v '</resources>' $CF > $R/cf.new
@@ -500,11 +556,42 @@ camfeat_apply() {
     grep -v "name=\"$n\"" $R/cf.new > $R/cf.tmp && mv $R/cf.tmp $R/cf.new
     printf '%s\n' "$nl" >> $R/cf.new
   done
+  # Slow motion: add slow_motion to the 4K120 and FHD120 entries in place (keeping their position
+  # and stock attributes), then put the rebuilt FHD240 entry last, as the working adb rebuild does.
+  if has slowmo4k120; then
+    for n in ${cf_slowmo_modes:-}; do
+      o=$(grep -m1 "name=\"$n\"" $R/cf.new || true)
+      [ -n "$o" ] || { log "slowmo4k120: $n not found in $CF; skipped"; continue; }
+      m=$(printf '%s' "$o" | sed -n 's/.*supported-mode="\([^"]*\)".*/\1/p')
+      case ",$m," in
+        *,slow_motion,*) ;;
+        ,,)
+          if printf '%s' "$o" | grep -q 'supported-mode="'; then
+            sed "/name=\"$n\"/ s|supported-mode=\"\"|supported-mode=\"slow_motion\"|" $R/cf.new > $R/cf.tmp && mv $R/cf.tmp $R/cf.new
+          else
+            sed "/name=\"$n\"/ s|/>| supported-mode=\"slow_motion\"/>|" $R/cf.new > $R/cf.tmp && mv $R/cf.tmp $R/cf.new
+          fi ;;
+        *)
+          sed "/name=\"$n\"/ s|supported-mode=\"$m\"|supported-mode=\"$m,slow_motion\"|" $R/cf.new > $R/cf.tmp && mv $R/cf.tmp $R/cf.new ;;
+      esac
+    done
+    grep -v 'name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_240FPS"' $R/cf.new > $R/cf.tmp && mv $R/cf.tmp $R/cf.new
+    echo "    $CF_SM_240FPS" >> $R/cf.new
+    log "slowmo4k120: 4K120 and FHD120 in Slow motion, FHD240 menu entry rebuilt"
+  fi
+  # USB-C storage: allow recording straight to an external drive in every video mode
+  if has extstorage; then
+    sed '/<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_/ s/external-storage-support="false"/external-storage-support="true"/g' $R/cf.new > $R/cf.tmp &&
+      mv $R/cf.tmp $R/cf.new
+    sed '/<local name="FRONT_CAMCORDER_RESOLUTION_FEATURE_MAP_/ s/external-storage-support="false"/external-storage-support="true"/g' $R/cf.new > $R/cf.tmp &&
+      mv $R/cf.tmp $R/cf.new
+  fi
   echo '</resources>' >> $R/cf.new
   mv $R/cf.new $R/camera-feature.xml; chmod 644 $R/camera-feature.xml
   chcon u:object_r:system_file:s0 $R/camera-feature.xml
-  mount --bind $R/camera-feature.xml $CF || fail "camera-feature bind mount"
-  log "camera settings on: $(printf '%s\n' "$cf_add" | sed -n 's/.*name="\([^"]*\)".*/\1/p' | tr '\n' ' ')${cf_video_modes:-}"
+  mount -o bind,ro $R/camera-feature.xml $CF || fail "camera-feature bind mount"
+  log "camera settings on: $(printf '%s\n' "$cf_add" | sed -n 's/.*name="\([^"]*\)".*/\1/p' | tr '\n' ' ')${cf_video_modes:-}$(has extstorage && echo ' external-storage')"
+  am force-stop com.sec.android.app.camera 2>/dev/null   # make the camera re-read the file, as the adb rebuild does
 }
 
 # Gallery's Log color correction (Edit > LUT, done by Samsung's video editor) reads the S24's LUTs
@@ -996,9 +1083,16 @@ colortone_bind() {
   log "colortone: Adaptive color tone on (Settings > Display)"
 }
 cam24fps_bind() {
+  cam24_soft=${1:-}
   set -- $(cam24_row)
-  [ -n "$1" ] || { log "cam24fps: this Camera APK isn't one the patch was made for (Camera 17.0.00.43 of $(cam24_builds)), so 24 fps stays hidden"; return 1; }
+  if [ -z "$1" ]; then
+    if [ -n "$cam24_soft" ]; then log "profps: this Camera APK has no 10x patch; the XML frame rates still apply and the 10x stays hidden"; return 0; fi
+    log "cam24fps: this Camera APK isn't one the patch was made for (Camera 17.0.00.43 of $(cam24_builds)), so 24 fps stays hidden"; return 1
+  fi
   CAM_STOCK_MD5=$1; CAM_PATCHED_MD5=$2; cpf=$3
+  if [ -n "$cam24_soft" ] && ! grep -q BACK_SECOND_TELE $D/files/$cpf 2>/dev/null; then
+    log "profps: this firmware's Camera patch doesn't unhide the 10x; the XML frame rates still apply"; return 0
+  fi
   cm=$(md5sum $CAM_APK | cut -d' ' -f1)
   if [ "$cm" = $CAM_PATCHED_MD5 ]; then :   # already patched (an earlier apply this boot)
   else
@@ -1008,14 +1102,19 @@ cam24fps_bind() {
       cp $CAM_APK $P.new
       grep -v '^#' $D/files/$cpf | while read off oct; do
         printf "\\$oct" | dd of=$P.new bs=1 seek=$off conv=notrunc 2>/dev/null; done
-      [ "$(md5sum $P.new | cut -d' ' -f1)" = $CAM_PATCHED_MD5 ] || { rm -f $P.new; fail "cam24fps: Camera patch gave the wrong file"; }
+      if [ "$(md5sum $P.new | cut -d' ' -f1)" != $CAM_PATCHED_MD5 ]; then
+        rm -f $P.new
+        [ -n "$cam24_soft" ] && { log "profps: the Camera patch didn't match this APK; the 10x stays hidden"; return 0; }
+        fail "cam24fps: Camera patch gave the wrong file"
+      fi
       mv $P.new $P
     fi
     chmod 644 $P; chcon u:object_r:system_file:s0 $P
     mount -o bind,ro $P $CAM_APK || fail "cam24fps: bind $CAM_APK"
     am force-stop com.sec.android.app.camera
   fi
-  log "cam24fps: 24 FPS in standard Video on (Camera > Video > FHD / UHD / 8K at 24 fps)"
+  if [ -n "$cam24_soft" ]; then log "profps: 10x super tele unhidden at 25/48/50 fps in Pro video"
+  else log "cam24fps: 24 FPS in standard Video on (Camera > Video > FHD / UHD / 8K at 24 fps)"; fi
 }
 
 # Now Brief, Creative Studio, Call Assist: the S24 firmware ships newer builds of these three apps.
@@ -1032,12 +1131,33 @@ galaxyai_stage() {
   done
   ff_set FRAMEWORK_SUPPORT_PERSONALIZED_DATA_CORE TRUE; ff_set FRAMEWORK_CONFIG_NOW_NUDGE_VERSION 2
   ff_set COMMON_CONFIG_AI_VERSION 20263
+  c2pa_stage
   return 0
+}
+# AI version 20263 also makes the S23's Visual Cloud Core pick its "V2" C2PA adapter (>= 20261), whose
+# four natives the S23's V1 libC2paDps.camera.samsung.so lacks: it crashed with UnsatisfiedLinkError
+# C2paLib.getVersion() (issue #19). floating_feature.xml is parsed in zygote, so the key can't be hidden
+# from that one app. files/libC2paDps-shim.so (src/c2pashim) goes over the library instead: it maps the
+# four V2 calls onto the V1 ones and forwards the rest to the original, added beside it as
+# libC2paDps_s23.camera.samsung.so. Skipped when the phone's library already has the V2 calls.
+C2PA=/system/lib64/libC2paDps.camera.samsung.so; C2PA_ORIG=$V/libC2paDps_s23.camera.samsung.so; C2PA_SHIM=$V/libC2paDps-shim.so
+c2pa_stage() {
+  c2pa=0
+  [ -f $C2PA ] && [ -f $D/files/libC2paDps-shim.so ] || return 1
+  if ! same_size $C2PA $D/files/libC2paDps-shim.so; then   # the firmware's library (not the shim of an earlier apply)
+    grep -q C2paLib_getVersion $C2PA && { log "galaxyai: this firmware's C2PA library already has the V2 calls; left as is"; return 1; }
+    cp $C2PA $C2PA_ORIG || return 1
+  fi
+  [ -s $C2PA_ORIG ] || return 1
+  cp $D/files/libC2paDps-shim.so $C2PA_SHIM || return 1
+  stage lib64 $C2PA_ORIG
+  c2pa=1
 }
 galaxyai_bind() {
   for p in $GAI_APPS; do n=${p#*/}
     bind_file $PL/galaxyai/$n.apk /system/$p/$n.apk system_file && rm -f /data/system/package_cache/*/$n-16-*
   done
+  [ "${c2pa:-0}" = 1 ] && [ -f /system/lib64/${C2PA_ORIG##*/} ] && bind_file $C2PA_SHIM $C2PA system_lib_file
   log "galaxyai: S24 Now Brief (Personal Data Intelligence), Creative Studio and Call Assist on"
 }
 # Settings search: the S24's Settings search app (com.android.settings.intelligence, same signature).
@@ -1083,6 +1203,39 @@ callscreen_apply() {
     *Success*) rm -rf $PL/callscreen; mkdir -p $V/undo; touch $V/undo/languagecore; log "callscreen: Language Core installed; turn on Phone > Settings > Call screening" ;;
     *) log "callscreen: install failed: $r" ;;
   esac
+}
+
+# weather: the lock screen Weather effect (rain, snow, fog or sun over the wallpaper, following Samsung
+# Weather). The effect is SpriteWallpaper's WeatherWallpaperService and runs on the S23 as is, but the
+# wallpaper editor (DressRoom) hides its Weather button unless LOCKSCREEN_CONFIG_WALLPAPER_STYLE has
+# GENWEATHER and Samsung AI Core reports FEATURE_WALLPAPER/FEATURE_DOWNLOAD and its "visionlvm" model
+# as downloaded. The S23 has no AI Core, so files/aicore-stub.apk (src/aicorestub; WX_VER = its
+# versionCode) answers just those checks and runs nothing; the model only feeds the S25's AI-generated
+# weather images, which the S23 can't make. A real AI Core, if installed, is left alone. The effect
+# also needs the live wallpaper app enabled: debloat lists often disable it, and then Android drops the
+# wallpaper ("WeatherWallpaperService is unavailable") and the lock screen goes black.
+WX_PKG=com.samsung.android.aicore; WX_LIVE=com.samsung.android.wallpaper.live; WX_VER=2
+WX_KEY=LOCKSCREEN_CONFIG_WALLPAPER_STYLE
+wx_style() {   # the stock value plus GENWEATHER (the file may be our own copy, which has it already)
+  v=$(grep -m1 -o "<SEC_FLOATING_FEATURE_$WX_KEY>[^<]*" $FF | cut -d'>' -f2 | tr ',' '\n' | grep -vx GENWEATHER | grep . | tr '\n' ',')
+  echo "${v}GENWEATHER"
+}
+wx_code() { dumpsys package $WX_PKG 2>/dev/null | grep -m1 -oE 'versionCode=[0-9]+' | cut -d= -f2; }
+wx_stub() { dumpsys package $WX_PKG 2>/dev/null | grep -q 'versionName=[^ ]*-s23tweaks'; }
+wx_real() { pm path $WX_PKG >/dev/null 2>&1 && ! wx_stub; }
+wx_live_off() { pm list packages -d --user 0 2>/dev/null | grep -qx "package:$WX_LIVE"; }
+weather_apply() {   # after the framework restart, so the package manager is settled
+  if wx_live_off; then pm enable --user 0 $WX_LIVE >/dev/null 2>&1 && log "weather: Samsung's live wallpaper app was disabled; turned it back on"; fi
+  if wx_real; then log "weather: Samsung AI Core is installed; it answers the editor itself"
+  elif [ "$(wx_code)" = $WX_VER ] && wx_stub; then :
+  else
+    T=/data/local/tmp/s23t-aicore-stub.apk   # the installer can't read files under /data/adb
+    cp $D/files/aicore-stub.apk $T && chmod 644 $T && chcon u:object_r:shell_data_file:s0 $T && r=$(pm install -r $T 2>&1)
+    case "$r" in *UPDATE_INCOMPATIBLE*) pm uninstall $WX_PKG >/dev/null 2>&1; r=$(pm install $T 2>&1) ;; esac   # signed by another build
+    rm -f $T
+    case "$r" in *Success*) ;; *) log "weather: couldn't install the AI Core stub: $r"; return 1 ;; esac
+  fi
+  log "weather: on; pick it in the lock screen editor (Wallpaper and style > Lock screen > Weather)"
 }
 
 # payload_fetch: download and unpack the files of each picked tweak that has them, unless the
@@ -1490,6 +1643,111 @@ statusbar_wifi_refresh() {
   log "status bar: nudged SystemUI to redraw the Wi-Fi icon after the framework restart"
 }
 
+# dual5g: 5G standalone on both SIMs at once (5G+5G DSDS). The modem's Qualcomm policyman decides it:
+# device_config.xml has <msim_config mode="5G_PLUS_5G" list="msim_plmns"/>, and global_defines.xml limits
+# msim_plmns to 460-* 712-* (China, Costa Rica). Anywhere else the modem runs 5G_PLUS_4G, and
+# disable_sa_ndds.xml takes the SA bands away from the SIM that isn't the data SIM. This adds the MCCs of
+# the SIMs in the phone to msim_plmns. It is a file in the modem's own storage (EFS), so unlike the other
+# tweaks it stays after a reboot: dual5g_restore puts the original back. files/efstool (src/efstool) reads
+# and writes EFS through the stock /vendor/bin/diag_socket_log; policyman reads the file when the modem
+# boots, so a write is followed by a modem-only restart (remoteproc, ~15 s without signal).
+D5G=$V/dual5g; D5G_F=/policyman/global_defines.xml; D5G_SD=/sdcard/Download/s23tweaks-modem-backup
+EFST=$D/files/efstool   # module files ship 0644; cleanup runs from /dev after the module folder is gone
+if [ -f $EFST ]; then [ -x $EFST ] || chmod 755 $EFST 2>/dev/null; else EFST=/dev/s23tweaks_efstool; fi
+d5g_mccs() {   # MCCs of the SIMs and of the networks they're on; countries with several MCCs get all of them
+  for n in $(getprop gsm.sim.operator.numeric | tr ',' ' ') $(getprop gsm.operator.numeric | tr ',' ' '); do
+    m=$(echo "$n" | cut -c1-3)
+    case $m in
+      404|405|406) echo 404 405 406 ;;                       # India (a carrier's SIM and towers can differ)
+      310|311|312|313|314|315|316) echo 310 311 312 313 314 315 316 ;;   # United States
+      440|441) echo 440 441 ;;                               # Japan
+      234|235) echo 234 235 ;;                               # United Kingdom
+      [0-9][0-9][0-9]) echo $m ;;
+    esac
+  done | tr ' ' '\n' | grep -E '^[0-9]{3}$' | sort -u | tr '\n' ' '
+}
+d5g_line() { grep -v '<!--' "$1" | grep '<plmn_list name="msim_plmns"'; }   # skips the commented-out stock line
+d5g_list() { d5g_line "$1" | sed -E 's/.*<plmn_list name="msim_plmns"[^>]*>([^<]*)<\/plmn_list>.*/\1/'; }
+d5g_added() { grep -m1 -o 's23tweaks dual5g added:[ 0-9]*' "$1" 2>/dev/null | cut -d: -f2; }
+d5g_strip() {   # $1 -> $2 without what dual5g added (used only when there is no stock backup)
+  rm_list=$(d5g_added "$1")
+  awk -v rm="$rm_list" 'BEGIN { n = split(rm, a, " ") }
+    /s23tweaks dual5g added:/ { next }
+    /<plmn_list name="msim_plmns"/ && !/<!--/ { for (i = 1; i <= n; i++) gsub(" " a[i] "-\\*", "") }
+    { print }' "$1" > "$2"
+}
+d5g_modem_restart() {
+  r=""; for x in /sys/class/remoteproc/remoteproc*; do grep -q 'remoteproc-mss' $x/name 2>/dev/null && r=$x; done
+  [ -n "$r" ] || { log "dual5g: can't find the modem's remoteproc; reboot the phone to use the new setting"; return 1; }
+  log "dual5g: restarting the modem so it reads the new setting (no signal for ~15 s)"
+  echo stop > $r/state 2>/dev/null; sleep 2
+  for i in 1 2 3; do echo start > $r/state 2>/dev/null; wait_for 20 [ "$(cat $r/state)" = running ] && break; done
+  [ "$(cat $r/state)" = running ] || { log "dual5g: the modem didn't come back; reboot the phone"; return 1; }
+  wait_for 60 sh -c 'getprop gsm.sim.state | grep -q LOADED'; log "dual5g: modem back up"
+}
+d5g_put() {   # $1 new file, $2 the file it replaces (rollback). Write, read back, compare; roll back on mismatch
+  $EFST put "$1" $D5G_F 2>>$L && $EFST get $D5G_F $R/d5g_check.xml 2>>$L && cmp -s "$1" $R/d5g_check.xml && return 0
+  log "dual5g: the write didn't verify; putting the previous file back"
+  $EFST put "$2" $D5G_F 2>>$L && $EFST get $D5G_F $R/d5g_check.xml 2>>$L && cmp -s "$2" $R/d5g_check.xml &&
+    { log "dual5g: previous file restored"; return 1; }
+  log "dual5g: COULD NOT RESTORE the modem file. The original is in $D5G/stock and $D5G_SD; run 'tweaks.sh dual5g-restore', or use *#27663368378# > ETC > MCFG > MCFG HW & SW RELOAD"
+  return 1
+}
+d5g_backup_stock() {   # once, before the first write ever; never overwritten
+  [ -f $D5G/stock/global_defines.xml ] && return 0
+  mkdir -p $D5G/stock
+  if [ -n "$(d5g_added $1)" ]; then d5g_strip $1 $D5G/stock/global_defines.xml   # ours already: rebuild the original
+  else cp $1 $D5G/stock/global_defines.xml; fi
+  for f in device_config.xml disable_sa_ndds.xml; do $EFST get /policyman/$f $D5G/stock/$f 2>/dev/null; done
+  mkdir -p $D5G_SD && cp $D5G/stock/* $D5G_SD/ && cat > $D5G_SD/README.txt <<EOF
+Original modem files from before s23-ultra-tweaks' "dual5g" tweak changed /policyman/global_defines.xml
+(model $(getprop ro.product.model), firmware $(getprop ro.build.PDA), saved $(date '+%Y-%m-%d %H:%M')).
+To put the original back: un-pick dual5g and apply, or run as root: sh <module folder>/tweaks.sh dual5g-restore
+Without the module: dial *#27663368378# > ETC > MCFG > MCFG HW & SW RELOAD (rewrites the modem's stock config).
+EOF
+  log "dual5g: original modem file backed up to $D5G/stock and $D5G_SD"
+}
+dual5g_apply() {
+  mkdir -p $R $D5G
+  wait_for 90 sh -c 'getprop gsm.sim.state | grep -q LOADED' || { log "dual5g: skipped: no SIM is ready"; return 1; }
+  sleep 3; mccs=$(d5g_mccs)
+  [ -n "$mccs" ] || { log "dual5g: skipped: the SIMs report no network code yet (try again later)"; return 1; }
+  $EFST get $D5G_F $R/d5g_live.xml 2>>$L || { log "dual5g: can't read $D5G_F from the modem"; return 1; }
+  [ "$(d5g_line $R/d5g_live.xml | wc -l)" = 1 ] || { log "dual5g: skipped: this modem has no single msim_plmns list in $D5G_F"; return 1; }
+  d5g_backup_stock $R/d5g_live.xml || { log "dual5g: couldn't back up the original; not changing anything"; return 1; }
+  cur=" $(d5g_list $R/d5g_live.xml) "; add=""
+  for m in $mccs; do case "$cur" in *" $m-* "*) ;; *) add="$add $m" ;; esac; done
+  if [ -z "$add" ]; then
+    log "dual5g: on; the modem already allows 5G on both SIMs for $(echo $mccs | sed 's/[0-9][0-9]*/&-*/g')"
+    echo "$cur" > $D5G/applied; return 0
+  fi
+  cp $R/d5g_live.xml $D5G/before-$(date +%Y%m%d-%H%M%S).xml   # every write gets its own backup
+  ours=$(echo $(d5g_added $R/d5g_live.xml) $add | tr ' ' '\n' | sort -u | tr '\n' ' ' | sed 's/ $//')
+  plmns=$(echo $add | sed 's/[0-9][0-9]*/&-*/g')
+  awk -v plmns="$plmns" -v ours="$ours" '
+    /s23tweaks dual5g added:/ { next }
+    /<plmn_list name="msim_plmns"/ && !/<!--/ { sub(/ *<\/plmn_list>/, " " plmns " </plmn_list>"); print
+      print "    <!-- s23tweaks dual5g added: " ours " -->"; next }
+    { print }' $R/d5g_live.xml > $R/d5g_new.xml
+  [ "$(d5g_line $R/d5g_new.xml | wc -l)" = 1 ] && grep -q '</policy>' $R/d5g_new.xml || { log "dual5g: building the new file failed; nothing changed"; return 1; }
+  d5g_put $R/d5g_new.xml $R/d5g_live.xml || return 1
+  log "dual5g: msim_plmns is now$(d5g_list $R/d5g_new.xml)"
+  echo " $(d5g_list $R/d5g_new.xml) " > $D5G/applied
+  d5g_modem_restart
+}
+dual5g_restore() {   # put the original modem file back
+  mkdir -p $R
+  $EFST get $D5G_F $R/d5g_live.xml 2>>$L || { log "dual5g: can't read $D5G_F from the modem"; return 1; }
+  if [ -f $D5G/stock/global_defines.xml ]; then src=$D5G/stock/global_defines.xml
+  elif [ -f $D5G_SD/global_defines.xml ]; then src=$D5G_SD/global_defines.xml
+  elif [ -n "$(d5g_added $R/d5g_live.xml)" ]; then d5g_strip $R/d5g_live.xml $R/d5g_orig.xml; src=$R/d5g_orig.xml
+  else log "dual5g: no backup and no change of ours in the modem file; nothing to restore"; rm -f $D5G/applied; return 0; fi
+  if cmp -s $src $R/d5g_live.xml; then log "dual5g: the modem file is already the original"; rm -f $D5G/applied; return 0; fi
+  d5g_put $src $R/d5g_live.xml || return 1
+  rm -f $D5G/applied; log "dual5g: original modem file restored (msim_plmns:$(d5g_list $src))"
+  d5g_modem_restart
+}
+
 restart_framework() {
   old=$(pidof system_server); log "restarting the Android framework (screen goes black for ~30 s)"
   setprop ctl.restart zygote
@@ -1518,6 +1776,9 @@ why_not() {
   case $1 in
     airdrop|wifi7)
       kernel_supported || { echo "needs firmware $(echo $AIRDROP_FW | sed 's/ /, /g') (this phone runs $build)"; return; }
+      if [ $1 = airdrop ] && ! kernel_stock && ! cfg80211_stock; then
+        echo "this kernel ships its own Wi-Fi stack (cfg80211.ko built for $(cfg80211_vermagic | grep . || echo "an unknown kernel"), not $AIRDROP_KBASE*), which the S24 Wi-Fi driver can't register with; Wi-Fi 7 and the 6 GHz hotspot still work"; return
+      fi
       [ "${gms:-0}" -ge $GMS_MIN ] || echo "needs Google Play services 26.11 or newer" ;;
     callrec|india)
       [ -f "$CSCF" ] || { echo "can't find this phone's carrier config (mdc.system.path is '$CSYS')"; return; }
@@ -1532,7 +1793,11 @@ why_not() {
     colortone)
       [ -n "$(ead_row)" ] || echo "needs firmware $(ead_builds) (it patches that build's Settings app; this phone runs $build)" ;;
     hotspot6g) [ -x /data/adb/ksu/bin/resetprop ] || echo "needs KernelSU's resetprop" ;;
+    weather)
+      pm path $WX_LIVE >/dev/null 2>&1 || { echo "this phone has no Samsung live wallpaper app ($WX_LIVE)"; return; }
+      pm path com.samsung.android.app.dressroom >/dev/null 2>&1 || echo "this phone has no Wallpaper and style app (DressRoom)" ;;
     camerahdr) grep -q "<SEC_FLOATING_FEATURE_$CH_KEY>[^<]" $FF 2>/dev/null || echo "this firmware has no $CH_KEY camera setting to add the HDR steps to" ;;
+    videosoftening|afcontrol|aelimit) grep -q '</SecFloatingFeatureSet>' $FF 2>/dev/null || echo "this firmware's $FF can't be edited" ;;
     tenbit) [ -f $TB_LIB ] || echo "this phone has no $TB_LIB" ;;
     hideksu)
       set -- $(hks_row); m=$(md5 $KSUJAR)
@@ -1540,7 +1805,10 @@ why_not() {
         { echo "this phone's /system/framework/services.jar (md5 $m) isn't one a patch was made from ($(echo "$HIDEKSU_JARS" | cut -d' ' -f3- | tr '\n' ',' | sed 's/,$//; s/,/, /g')); tools/hideksupatch.sh can make one"; return; }
       pm path me.weishu.kernelsu >/dev/null 2>&1 || echo "the KernelSU manager (me.weishu.kernelsu) isn't installed, so there's nothing to hide" ;;
     hdr2023) for f in $H23_LIBS; do [ -f /system/lib64/$f ] || { echo "this phone has no /system/lib64/$f to replace"; return; }; done ;;
-    logvideo|camextras) grep -q '</resources>' $CF 2>/dev/null || echo "this firmware's $CF can't be edited" ;;
+    logvideo|camextras|wideflash|prowbtint|zoomrocker|slowmoaf|extstorage|anamorphic|profps) grep -q '</resources>' $CF 2>/dev/null || echo "this firmware's $CF can't be edited" ;;
+    slowmo4k120)
+      grep -q '</resources>' $CF 2>/dev/null || { echo "this firmware's $CF can't be edited"; return; }
+      grep -q 'BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_120FPS' $CF 2>/dev/null || echo "this firmware has no 4K120 entry to enable in Slow motion" ;;
     cam24fps)
       [ -f $CAM_APK ] || { echo "this phone has no $CAM_APK"; return; }
       pm path com.sec.android.app.camera 2>/dev/null | grep -q "^package:$CAM_APK$" || { echo "uninstall Samsung Camera updates first so stock $CAM_APK is active"; return; }
@@ -1551,6 +1819,10 @@ why_not() {
     galaxyai)
       for p in $GAI_APPS; do [ -f /system/$p/${p#*/}.apk ] || { echo "this phone has no /system/$p/${p#*/}.apk to replace"; return; }; done ;;
     settingssearch) [ -f /system/$SSI/SecSettingsIntelligence.apk ] || echo "this phone has no /system/$SSI to replace" ;;
+    dual5g)
+      [ -x $EFST ] || { echo "files/efstool is missing"; return; }
+      [ -x /vendor/bin/diag_socket_log ] || { echo "this firmware has no /vendor/bin/diag_socket_log to reach the modem with"; return; }
+      [ "$(getprop persist.radio.multisim.config)" = dsds ] || echo "needs a dual-SIM phone in dual standby (DSDS) mode" ;;
     callscreen)
       [ "${lcv:-0}" -ge 400000000 ] 2>/dev/null || [ "$(df -k /data | awk 'NR == 2 {print $4}')" -ge 7340032 ] ||
         echo "needs about 7 GB free on the phone for its 3.1 GB download" ;;
@@ -1571,8 +1843,20 @@ is_on() {
     display) bound $FF && grep -q "<SEC_FLOATING_FEATURE_LCD_CONFIG_AOD_FULLSCREEN>1<" $FF 2>/dev/null ;;
     logvideo) bound $CF && grep -q 'name="SUPPORT_LOG_VIDEO" value="true"' $CF 2>/dev/null ;;
     camextras) bound $CF && grep -q 'name="SUPPORT_SUPER_STEADY_HORIZONTAL_LOCK" value="true"' $CF 2>/dev/null ;;
+    wideflash) bound $CF && grep -q 'name="SUPPORT_FLASH_IN_WIDE_LENS" value="true"' $CF 2>/dev/null ;;
+    prowbtint) bound $CF && grep -q 'name="SUPPORT_PRO_WHITE_BALANCE_TINT" value="true"' $CF 2>/dev/null ;;
+    zoomrocker) bound $CF && grep -q 'name="SUPPORT_VIDEO_MODE_ZOOM_ROCKER" value="true"' $CF 2>/dev/null ;;
+    videosoftening) grep -q '<SEC_FLOATING_FEATURE_CAMERA_SUPPORT_VIDEO_SOFTENING>TRUE<' $FF 2>/dev/null ;;
+    afcontrol) grep -q '<SEC_FLOATING_FEATURE_CAMERA_SUPPORT_AFSPEED>TRUE<' $FF 2>/dev/null && grep -q '<SEC_FLOATING_FEATURE_CAMERA_SUPPORT_AFSENSITIVITY>TRUE<' $FF 2>/dev/null ;;
+    aelimit) grep -q '<SEC_FLOATING_FEATURE_CAMERA_SUPPORT_AUTO_EXPOSURE_LIMIT>TRUE<' $FF 2>/dev/null ;;
+    slowmoaf) bound $CF && grep -q 'name="SUPPORT_SLOW_MOTION_AF_DURING_RECORDING" value="true"' $CF 2>/dev/null && grep -q '<SEC_FLOATING_FEATURE_CAMERA_SUPPORT_AF_DURING_SLOWMOTION_RECORDING>TRUE<' $FF 2>/dev/null ;;
+    extstorage) bound $CF && grep -q 'BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_60FPS.*external-storage-support="true"' $CF 2>/dev/null ;;
+    anamorphic) bound $CF && grep -q 'name="SUPPORT_CAMERA_ASSISTANT_ANAMORPHIC_LENS" value="true"' $CF 2>/dev/null ;;
+    profps) bound $CF && grep -q 'name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_25FPS" value="true"' $CF 2>/dev/null ;;
+    slowmo4k120) bound $CF && grep -q 'name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_120FPS".*slow_motion' $CF 2>/dev/null ;;
     autoframe) grep -q "<SEC_FLOATING_FEATURE_CAMERA_CONFIG_AUTOFRAMING>uhd<" $FF 2>/dev/null ;;
     bargein) grep -q "<SEC_FLOATING_FEATURE_BIXBY_CONFIG_BARGEIN_PARAM_MODE>2<" $FF 2>/dev/null ;;
+    weather) grep -q "<SEC_FLOATING_FEATURE_$WX_KEY>[^<]*GENWEATHER" $FF 2>/dev/null && pm path $WX_PKG >/dev/null 2>&1 && ! wx_live_off ;;
     settingssearch) bound /system/$SSI/SecSettingsIntelligence.apk ;;
     callscreen) [ "$(lc_installed)" -ge 400000000 ] 2>/dev/null ;;
     vulkan) [ "$(getprop debug.hwui.renderer)" = skiavk ] ;;
@@ -1584,11 +1868,12 @@ is_on() {
     cam24fps) bound $CAM_APK && bound $CF && grep -q 'name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_24FPS".*supported-mode="[^"]*video' $CF 2>/dev/null ;;
     galaxyai) bound /system/priv-app/SamsungSmartSuggestions/SamsungSmartSuggestions.apk ;;
     hideksu) hideksu_on ;;
+    dual5g) [ -f $D5G/applied ] ;;
     perfboost) bound $PBC ;;
     deepdoze) [ -e $V/battery_doze ] ;;
     debloat) [ -f $V/features_disabled_pkgs ] ;;
     extrafeatures) bound $FF && grep -q SYSTEM_SUPPORT_ENHANCED_PROCESSING $FF 2>/dev/null ;;
-    extracam) bound $FF && grep -q CAMERA_SUPPORT_AFSENSITIVITY $FF 2>/dev/null ;;
+    extracam) bound $FF && grep -q CAMERA_SUPPORT_AFSMARTTRACKING $FF 2>/dev/null ;;
     vulkangpu) [ "$(getprop ro.zygote.disable_gl_preload)" = 1 ] ;;
     *) return 1 ;;
   esac
@@ -1663,17 +1948,41 @@ $CF_LOG"
   fi
   has camextras && cf_add="$cf_add
 $CF_HLOCK"
-  has extracam && ff_tags="$ff_tags CAMERA_SUPPORT_AFSENSITIVITY CAMERA_SUPPORT_AFSMARTTRACKING CAMERA_SUPPORT_AFSPEED CAMERA_SUPPORT_AF_DURING_SLOWMOTION_RECORDING CAMERA_SUPPORT_AUTO_EXPOSURE_LIMIT CAMERA_SUPPORT_VIDEO_SOFTENING CAMERA_SUPPORT_MOTIONPHOTO_AUTO_TRIM_MODE CAMERA_SUPPORT_PORTRAIT_INTELLIGENT_OPTIMIZATION_AI_ISP CAMERA_SUPPORT_CINEMATIC_PORTRAITVIDEO CAMERA_SUPPORT_EDITABLE_PORTRAITVIDEO"
-  has cam24fps && cf_video_modes="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_24FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_24FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_7680X4320_24FPS"
+  has extracam && ff_tags="$ff_tags CAMERA_SUPPORT_AFSMARTTRACKING CAMERA_SUPPORT_MOTIONPHOTO_AUTO_TRIM_MODE CAMERA_SUPPORT_PORTRAIT_INTELLIGENT_OPTIMIZATION_AI_ISP CAMERA_SUPPORT_CINEMATIC_PORTRAITVIDEO CAMERA_SUPPORT_EDITABLE_PORTRAITVIDEO"
+  has wideflash && cf_add="$cf_add
+$CF_WIDEFLASH
+$CF_WIDEFLASH_CA"
+  has prowbtint && cf_add="$cf_add
+$CF_PROWBTINT"
+  has zoomrocker && cf_add="$cf_add
+$CF_ZOOMROCKER"
+  has slowmoaf && cf_add="$cf_add
+$CF_SLOWMOAF"
+  has anamorphic && cf_add="$cf_add
+$CF_ANAMORPHIC
+$CF_ANAMORPHIC_SCALER"
+  has profps && cf_add="$cf_add
+$CF_PROFPS"
+  has slowmo4k120 && cf_slowmo_modes="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_120FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_120FPS"
+  has cam24fps && cf_video_modes="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_24FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_24FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_7680X4320_24FPS FRONT_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_24FPS FRONT_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_24FPS"
   camfeat_apply && restart=1
-  has cam24fps && cam24fps_bind
+  if has cam24fps; then cam24fps_bind
+  elif has profps; then cam24fps_bind soft   # only where the APK patch is compatible; one bind either way
+  fi
   # 4K auto framing (untested): the S24's UHD setting for auto framing in video
   has autoframe && ff_set CAMERA_CONFIG_AUTOFRAMING uhd
+  # Camera Assistant: video softening (Off / Medium / High) and the AF speed/sensitivity controls
+  has videosoftening && ff_set CAMERA_SUPPORT_VIDEO_SOFTENING TRUE
+  has afcontrol && { ff_set CAMERA_SUPPORT_AFSPEED TRUE; ff_set CAMERA_SUPPORT_AFSENSITIVITY TRUE; }
+  has aelimit && ff_set CAMERA_SUPPORT_AUTO_EXPOSURE_LIMIT TRUE
+  has slowmoaf && ff_set CAMERA_SUPPORT_AF_DURING_SLOWMOTION_RECORDING TRUE
   has tenbit && tenbit_apply   # restarts only the camera driver
   if has camextras; then hlock_apply   # restarts only the camera driver
   elif bound $HL_LIB || bound $HA_LIB || bound $HL2_LIB || bound $HA2_LIB; then tb_restart hl_unbind && log "camextras: not picked; stock EIS back"; fi
   # Bixby barge-in (untested): talk over Bixby while it answers, as on the S24
   has bargein && ff_set BIXBY_CONFIG_BARGEIN_PARAM_MODE 2
+  # Lock screen Weather effect: the editor's Weather button (weather_apply adds the AI Core stub)
+  has weather && ff_set $WX_KEY "$(wx_style)"
   # Draw apps with Vulkan instead of OpenGL (Samsung's libhwui ignores ro.hwui.use_vulkan)
   has vulkan && { setprop debug.hwui.renderer skiavk; log "vulkan: apps render with Skia on Vulkan"; restart=1; }
   has vulkangpu && { /data/adb/ksu/bin/resetprop ro.zygote.disable_gl_preload 1 && log "vulkangpu: GL preload disabled (ro.zygote.disable_gl_preload=1)"; restart=1; }
@@ -1693,6 +2002,10 @@ $CF_HLOCK"
   if has debloat; then features_pkgs_off; else features_pkgs_on; fi
   has camextras && directorsview_pref
   has callscreen && callscreen_apply
+  if has weather; then weather_apply
+  elif wx_stub; then pm uninstall $WX_PKG >/dev/null 2>&1 && log "weather: not picked; AI Core stub uninstalled"; fi
+  if has dual5g; then dual5g_apply
+  elif [ -f $D5G/applied ]; then log "dual5g: not picked; putting the original modem file back"; dual5g_restore; fi
   has airdrop && airdrop_post
   [ $restart = 1 ] && statusbar_wifi_refresh   # the framework restart can drop the Wi-Fi status-bar icon
   on=""; off=""; for x in $2; do if is_on $x; then on="$on $x"; else off="$off $x"; fi; done
@@ -1757,21 +2070,34 @@ status)
   echo "camextras: horizon lock $(is_on camextras && echo on || echo off), levelling $(bound $HL_LIB && echo "on ($(hl_desc))" || echo off), Director's view $(grep -q '<string name="directors_view_mode">1</string>' $CAM_PREFS 2>/dev/null && echo shown || echo hidden)"
   echo "autoframe: $(grep -o '<SEC_FLOATING_FEATURE_CAMERA_CONFIG_AUTOFRAMING>[^<]*' $FF | cut -d'>' -f2 | grep . || echo stock)"
   echo "bargein:  $(grep -q '<SEC_FLOATING_FEATURE_BIXBY_CONFIG_BARGEIN_PARAM_MODE>2<' $FF && echo on || echo off)"
+  echo "weather:  flag $(grep -q "<SEC_FLOATING_FEATURE_$WX_KEY>[^<]*GENWEATHER" $FF && echo on || echo off), AI Core $(wx_stub && echo "stub $(wx_code)" || { wx_real && echo Samsung || echo none; }), live wallpaper app $(wx_live_off && echo disabled || echo enabled)"
   echo "settingssearch: $(bound /system/$SSI/SecSettingsIntelligence.apk && echo S24 || echo stock)"
   echo "callscreen: Language Core $(dumpsys package $LC_PKG 2>/dev/null | grep -m1 -oE 'versionName=[^ ]+' | cut -d= -f2)"
   echo "camerahdr: libraries $([ -f /system/lib64/liblow_light_hdr.arcsoft.so ] && echo on || echo off), list entries $(grep -q 'mfhdr.arcsoft.v4' $FF && echo on || echo off)"
   echo "hdr2023:  $(same_size /system/lib64/libae_bracket_hdr.arcsoft.so $PL/hdr2023/libae_bracket_hdr.arcsoft.so && same_size /system/lib64/libhybrid_high_dynamic_range.arcsoft.so $PL/hdr2023/libhybrid_high_dynamic_range.arcsoft.so && echo "2023 engines" || echo stock)"
   echo "tenbit:   front-camera 10-bit $(is_on tenbit && echo on || echo off)"
   echo "cam24fps: Camera $(bound $CAM_APK && echo patched || echo stock), 24fps video modes $(is_on cam24fps && echo on || echo off)"
+  echo "wideflash: $(is_on wideflash && echo on || echo off)"
+  echo "prowbtint: $(is_on prowbtint && echo on || echo off)"
+  echo "zoomrocker: $(is_on zoomrocker && echo on || echo off)"
+  echo "videosoftening: $(is_on videosoftening && echo on || echo off)"
+  echo "afcontrol: $(is_on afcontrol && echo on || echo off)"
+  echo "aelimit: $(is_on aelimit && echo on || echo off)"
+  echo "slowmoaf: $(is_on slowmoaf && echo on || echo off)"
+  echo "extstorage: $(is_on extstorage && echo on || echo off)"
+  echo "anamorphic: $(is_on anamorphic && echo on || echo off)"
+  echo "profps: $(is_on profps && echo on || echo off), 10x Camera $(cam24_profps_on && echo "APK patched" || echo "XML only")"
+  echo "slowmo4k120: $(is_on slowmo4k120 && echo on || echo off)"
   echo "audioeraser: $([ -f /system/etc/fastScanner.tflite ] && echo on || echo off), engine $(same_size /system/lib64/$VE $PL/audioeraser/$VE && echo S24 || echo stock)"
   echo "colortone: Settings $(bound $SETTINGS && echo patched || echo stock), service $([ -f /system/priv-app/$EAD/$EAD.apk ] && echo on || echo off)"
-  echo "galaxyai: $(for p in $GAI_APPS; do n=${p#*/}; printf '%s=%s ' $n "$(same_size /system/$p/$n.apk $PL/galaxyai/$n.apk && echo S24 || echo stock)"; done)"
+  echo "galaxyai: $(for p in $GAI_APPS; do n=${p#*/}; printf '%s=%s ' $n "$(same_size /system/$p/$n.apk $PL/galaxyai/$n.apk && echo S24 || echo stock)"; done)C2PA=$(same_size $C2PA $D/files/libC2paDps-shim.so && echo shim || echo stock)"
   echo "vulkan:   renderer $(getprop debug.hwui.renderer | grep . || echo default)"
   echo "hideksu:  $(hideksu_on && echo "on (KernelSU manager hidden from apps)" || { bound $KSUJAR && echo "bound, waiting for a framework restart" || echo off; }); mounts $(hidemnt_running && { n=$(hidemnt_count); [ "$n" -gt 0 ] 2>/dev/null && echo "hidden from user-installed apps ($n override(s))" || echo "hidden from user-installed apps"; } || echo "visible to apps")"
   echo "wifi7:    wpa_supplicant $(bound $WPAS && echo S24 || echo stock), driver MLO settings $(bound $INI && echo on || echo off)"
   echo "6ghz ap:  $(h6_offered && echo offered || echo "not offered") (CSC country $(getprop ro.csc.countryiso_code), override $(getprop $H6_PROP | grep . || echo unset))"
   echo "csc:      $SC $(bound $CSCF && { grep -q '<SalesCode>INS<' $CSCF && echo "with the INS config" || echo "with call recording"; } || echo stock) ($CSYS)"
   echo "reported: model $(getprop ro.product.model), csc $(getprop ro.csc.sales_code), country $(getprop ro.csc.countryiso_code)$([ -e $V/india_identity ] && [ "$(getprop ro.product.model)" = $IN_MODEL ] && echo " (india identity on)")"
+  echo "dual5g:   $([ -f $D5G/applied ] && echo "on (modem msim_plmns:$(cat $D5G/applied))" || echo off)$([ -f $D5G/stock/global_defines.xml ] && echo "; original backed up in $D5G/stock")"
   ;;
 cleanup)
   # Undo everything that outlives a reboot, then delete the state folder. module/uninstall.sh runs this
@@ -1786,6 +2112,7 @@ cleanup)
     for k in call_screening call_screening_auto_screening_onoff call_screening_voice call_screening_voice_speech_rate; do
       settings delete system $k >/dev/null 2>&1; done
   fi
+  wx_stub && pm uninstall $WX_PKG >/dev/null 2>&1 && say "AI Core stub uninstalled"
   if [ -f $V/undo/directors_view ] && [ -f $CAM_PREFS ]; then
     v=$(cat $V/undo/directors_view); am force-stop com.sec.android.app.camera; mkdir -p $R
     if [ "$v" = absent ]; then grep -v 'name="directors_view_mode"' $CAM_PREFS > $R/camprefs.new
@@ -1809,6 +2136,12 @@ cleanup)
     while read -r pkg; do [ -n "$pkg" ] && pm enable --user 0 "$pkg" >/dev/null 2>&1; done < $V/features_disabled_pkgs
     say "suppressed background packages restored"
   fi
+  if [ -f $D5G/applied ] || [ -f $D5G/stock/global_defines.xml ]; then
+    mkdir -p $R; : > $L
+    if dual5g_restore; then say "dual5g: original modem file restored"
+    else say "dual5g: COULD NOT restore the modem file; the original stays in $D5G_SD"; cp -r $D5G $D5G_SD/state 2>/dev/null; fi
+  fi
+  rm -f /dev/s23tweaks_efstool
   rm -f /data/adb/service.d/s23tweaks.sh
   cd /; rm -rf $V
   say "done; the next reboot removes what's still mounted"
@@ -1894,6 +2227,13 @@ report)
     if [ -n "$sn" ]; then sed "s/$sn/<serial>/g"; else cat; fi > $out
   echo "$out"
   ;;
+dual5g-restore)
+  # put the modem's original /policyman/global_defines.xml back (also what un-picking dual5g does)
+  [ "$(id -u)" = 0 ] || { echo "needs root" >&2; exit 1; }
+  mkdir -p $R; L=$R/dual5g-restore.log; : > $L
+  dual5g_restore; rc=$?
+  cat $L; cat $L >> $V/tweaks.log; exit $rc
+  ;;
 unflag)
   G=/data/data/com.google.android.gms; DB=$G/databases/phenotype.db; SQ=$AIR/sqlite3; W=$R/gms
   [ -x $SQ ] || { echo "the AirDrop download (with its sqlite3) isn't on the phone; pick AirDrop once to fetch it" >&2; exit 1; }
@@ -1968,5 +2308,5 @@ wifi7page)
   am start -n com.android.settings/.SubSettings \
     --es :settings:show_fragment com.samsung.android.settings.wifi.develop.WifiLabs7ModeSettingsFragment
   ;;
-*) echo "usage: tweaks.sh start|apply \"<tweaks>\" | probe | status | unflag | autostart on|off | wifi7page"; exit 2 ;;
+*) echo "usage: tweaks.sh start|apply \"<tweaks>\" | probe | status | unflag | dual5g-restore | autostart on|off | wifi7page"; exit 2 ;;
 esac

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Answers DressRoom's two AI Core checks for the lock screen Weather effect ("is the AI wallpaper
+     feature there?" and "is its model downloaded?"). It runs nothing: every other feature reads as not
+     available. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.samsung.android.aicore" android:versionCode="2" android:versionName="0.0.2-s23tweaks">
+    <uses-sdk android:minSdkVersion="34" android:targetSdkVersion="36" />
+    <application android:label="AI Core stub (s23-ultra-tweaks)" android:hasCode="true" android:allowBackup="false">
+        <provider android:name=".FeatureProvider" android:authorities="com.samsung.android.aicore.feature"
+            android:exported="true" />
+        <service android:name=".DownloadService" android:exported="true">
+            <intent-filter><action android:name="visual.intent.action.BIND_DOWNLOAD_SERVICE" /></intent-filter>
+        </service>
+    </application>
+</manifest>

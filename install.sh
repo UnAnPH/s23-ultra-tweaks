@@ -8,7 +8,7 @@ set -euo pipefail
 # below can read the rest of the script from stdin (curl | bash).
 main() {
 REPO=dtechterminal/s23-ultra-tweaks
-VERSION=v1.3.9
+VERSION=v1.6.0
 AIRDROP_KBASE=5.15.197-android13-8-34343818-ab; AIRDROP_FW="S918WVLU8GZIF S918BXXUAGZIF S918U1UEU8GZIF S918USQU8GZIF S918NKSU8GZIF"   # as in device/tweaks.sh
 PHONE_DIR=/data/adb/s23tweaks          # state (and the code, when the module isn't installed)
 MODULE_DIR=/data/adb/modules/s23_ultra_tweaks
@@ -64,7 +64,7 @@ can_csc=1; why_csc=""; oneui=$(sh_ getprop ro.build.version.oneui)
 [ "$csc" = INS ] && { can_csc=0; why_csc="this phone's sales code is INS already"; }
 can_ct=1; why_ct=""; case "$build" in S918WVLU8GZIF|S918BXXUAGZIF) ;; *) can_ct=0; why_ct="needs firmware S918WVLU8GZIF or S918BXXUAGZIF (it patches that build's Settings app)" ;; esac   # SETTINGS_EAD in device/tweaks.sh
 # cam24fps goes by the Camera APK, not the firmware: stock and patched md5s as in CAMERA_24FPS (device/tweaks.sh)
-CAM24_MD5="174e38e111f53c92eea54fd8b9a8c1c6 167b412279d4fd5f3ce7e89232725bc8 e7c89df10d6607ea1ddeedceee961903 650dc854741a92f54be455fc19cd4c89"
+CAM24_MD5="174e38e111f53c92eea54fd8b9a8c1c6 b22942b22ec14896bc02277d319b7623 e7c89df10d6607ea1ddeedceee961903 650dc854741a92f54be455fc19cd4c89"
 cam_md5=$(sh_ md5sum /system/priv-app/SamsungCamera/SamsungCamera.apk 2>/dev/null | cut -d' ' -f1)
 can_c24=0; why_c24="this phone's Samsung Camera isn't one the 24 fps patch was made for (Camera 17.0.00.43 of S918BXXUAGZIF or S918WVLU8GZIF)"
 case " $CAM24_MD5 " in *" ${cam_md5:-none} "*) can_c24=1; why_c24="" ;; esac
@@ -85,12 +85,12 @@ lc_have=$(sh_ "dumpsys package com.samsung.android.offline.languagemodel 2>/dev/
 
 # Tweaks, grouped in categories. A category letter picks every available tweak in it.
 ids=(airdrop wifi7 hotspot6g
-     logvideo camextras camerahdr hdr2023 autoframe tenbit cam24fps
-     display colortone vulkan
+     logvideo camextras camerahdr hdr2023 autoframe tenbit cam24fps wideflash prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage anamorphic profps slowmo4k120
+     display colortone vulkan weather
      galaxyai audioeraser settingssearch callscreen bargein
      battery features hideksu
-     callrec india)
-cat=(A A A  B B B B B B B  C C C  D D D D D  E E E  F F)
+     callrec india dual5g)
+cat=(A A A B B B B B B B B B B B B B B B B B B C C C C D D D D D E E E F F F)
 cats=(A B C D E F)
 catname=("Connectivity" "Camera" "Display and graphics" "Galaxy AI and Samsung apps" "Battery and settings" "Carrier")
 desc=("AirDrop: Quick Share > Share with Apple devices (S24 Wi-Fi driver + Google's Mosey; 20 MB download)"
@@ -103,9 +103,21 @@ desc=("AirDrop: Quick Share > Share with Apple devices (S24 Wi-Fi driver + Googl
       "4K auto framing: the S24's UHD auto framing in video (reported to make the camera fail; pick it by number)"
       "Front-camera 10-bit: apps can record 10-bit HDR (HLG10) video with the selfie cameras (patches a copy of the camera driver)"
       "24 FPS in standard Video: adds 24 fps to FHD, UHD and 8K in standard Video (patches a copy of Samsung Camera)"
+      "Flash on 0.6x ultrawide: Photo flash and Video torch on the ultrawide lens, plus its Camera Assistant menu"
+      "White-balance tint in Pro: the Tint slider next to the colour temperature in Pro and Pro video"
+      "Video zoom rocker: the smooth zoom rocker/slider in the standard Video mode"
+      "Video softening: Camera Assistant's Off / Medium / High video softening, which reduces over-sharpening"
+      "Autofocus controls: Camera Assistant's AF speed and AF sensitivity"
+      "Auto exposure limit: Camera Assistant's cap on how far the camera raises ISO or slows the shutter"
+      "Touch focus in Slow motion: tap the viewfinder to focus while recording a slow-motion video"
+      "Record to USB-C storage: record straight to a USB-C SSD or drive in every video mode"
+      "Anamorphic desqueeze: Camera Assistant's 1.33x / 1.55x / 2.0x anamorphic lens desqueeze"
+      "Extra Pro video frame rates: 4K 25/48/50/100/120 (120 on Wide and Ultrawide), FHD 25/48/50/100, 8K 25, 21:9 Cinema 25/48/50/100/120, and the 10x super tele at 25/48/50 with the patched Camera APK"
+      "4K120 in Slow motion: adds 4K120 and FHD120 to Slow motion and rebuilds the FHD240 menu entry"
       "Always On Display: lock screen wallpaper, and AOD brightness that follows the room light"
       "Adaptive color tone: Settings > Display, the screen's colour follows the room light (1 MB download)"
       "Vulkan rendering: apps draw with Vulkan instead of OpenGL"
+      "Lock screen weather effect: rain, snow, fog or sun over the lock screen wallpaper, following Samsung Weather (installs a 12 KB AI Core stub app)"
       "Galaxy AI apps: the S24's Now Brief, Creative Studio and Call Assist (219 MB download)"
       "Audio Eraser: remove wind, noise, music or voices from videos in Gallery (34 MB download)"
       "Settings search: the S24's new Settings search bar; natural-language answers stay off (10 MB download)"
@@ -115,9 +127,10 @@ desc=("AirDrop: Quick Share > Share with Apple devices (S24 Wi-Fi driver + Googl
       "Extra settings: Auto power on/off schedule, louder VoIP calls"
       "HideKSU: hide the KernelSU root manager from apps, so root-aware apps like CRED stop crashing (patched services.jar; 12 MB download; needs the KernelSU manager installed)"
       "Call recording in the Samsung Phone app"
-      "India carrier config for Airtel/Jio SIMs: 'Use 5G standalone networks' switch, call recording, Smart IVR, message cards, plus Samsung Wallet India (UPI, DigiLocker, transit) and the 6 GHz hotspot by reporting the phone as the Indian model; reverts on reboot, the sales code on disk is untouched")
-avail=($can_airdrop $can_airdrop 1  1 1 1 1 1 1 $can_c24  1 $can_ct 1  1 1 1 $can_lc 1  1 1 $can_ksu  $can_rec $can_csc)
-why=("$why_airdrop" "$why_airdrop" ""  "" "" "" "" "" "" "$why_c24"  "" "$why_ct" ""  "" "" "" "$why_lc" ""  "" "" "$why_ksu"  "$why_rec" "$why_csc")
+      "India carrier config for Airtel/Jio SIMs: 'Use 5G standalone networks' switch, call recording, Smart IVR, message cards, plus Samsung Wallet India (UPI, DigiLocker, transit) and the 6 GHz hotspot by reporting the phone as the Indian model; reverts on reboot, the sales code on disk is untouched"
+      "Dual SIM 5G: 5G standalone on both SIMs at once instead of only the data SIM (adds your SIMs' country to the modem's 5G+5G list; stays until un-picked; the original is backed up first)")
+avail=($can_airdrop $can_airdrop 1 1 1 1 1 1 1 $can_c24 1 1 1 1 1 1 1 1 1 1 1 1 $can_ct 1 1 1 1 1 $can_lc 1 1 1 $can_ksu $can_rec $can_csc 1)
+why=("$why_airdrop" "$why_airdrop" "" "" "" "" "" "" "" "$why_c24" "" "" "" "" "" "" "" "" "" "" "" "" "$why_ct" "" "" "" "" "" "$why_lc" "" "" "" "$why_ksu" "$why_rec" "$why_csc" "")
 
 # pre-release builds lived in /data/local/tmp/s23tweaks: carry the picks and the Play services backup over
 sh_ "su -c '[ -d /data/local/tmp/s23tweaks ] && [ ! -e $PHONE_DIR/choices ] && mkdir -p $PHONE_DIR && cp -r /data/local/tmp/s23tweaks/choices /data/local/tmp/s23tweaks/backup $PHONE_DIR/ 2>/dev/null; true'" >/dev/null
@@ -240,11 +253,24 @@ case " $picked " in *" colortone "*) info "Adaptive color tone: Settings > Displ
 case " $picked " in *" galaxyai "*) info "Now Brief: turn on Settings > Galaxy AI > Personal data intelligence. Creative Studio is in the app drawer." ;; esac
 case " $picked " in *" camextras "*) info "Camera extras: Camera > More > Director's view; Video > Super steady > Horizontal lock." ;; esac
 case " $picked " in *" cam24fps "*) info "24 FPS in standard Video: Camera > Video > resolution/FPS > FHD / UHD / 8K at 24." ;; esac
+case " $picked " in *" wideflash "*) info "Flash on ultrawide: Camera > Photo flash and Video torch on the 0.6x lens; Camera Assistant shows the wide-flash option." ;; esac
+case " $picked " in *" prowbtint "*) info "White-balance tint: Camera > Pro or Pro video > white balance > Tint slider." ;; esac
+case " $picked " in *" zoomrocker "*) info "Zoom rocker: the smooth zoom slider in Camera > Video." ;; esac
+case " $picked " in *" videosoftening "*) info "Video softening: Camera > Settings > Camera Assistant > Video softening (Off / Medium / High)." ;; esac
+case " $picked " in *" afcontrol "*) info "Autofocus controls: Camera > Settings > Camera Assistant > AF speed and AF sensitivity." ;; esac
+case " $picked " in *" aelimit "*) info "Auto exposure limit: Camera > Settings > Camera Assistant > Auto exposure limit." ;; esac
+case " $picked " in *" slowmoaf "*) info "Focus in Slow motion: Camera > Slow motion > tap the viewfinder while recording." ;; esac
+case " $picked " in *" extstorage "*) info "USB-C storage: plug an exFAT USB-C SSD/drive; Camera > Settings > Storage > USB storage, then record in any mode." ;; esac
+case " $picked " in *" anamorphic "*) info "Anamorphic desqueeze: Camera > Settings > Camera Assistant > anamorphic lens desqueeze (1.33x / 1.55x / 2.0x)." ;; esac
+case " $picked " in *" profps "*) info "Pro video frame rates: Camera > More > Pro video; 4K 25/48/50/100/120 (120 on Wide and Ultrawide), FHD 25/48/50/100, 8K 25, 21:9 Cinema 25/48/50/100/120. The 10x works on S918BXXUAGZIF with the patched Camera APK; on other firmwares it stays hidden." ;; esac
+case " $picked " in *" slowmo4k120 "*) info "4K120 in Slow motion: Camera > Slow motion > 4K120; turn on Log video for the Log profile." ;; esac
 case " $picked " in *" settingssearch "*) info "Settings search: open Settings and tap the search bar." ;; esac
 case " $picked " in *" callscreen "*) info "Call screening: Phone > Settings > Call screening. The AI summary shows an error on the S23; screening and voice messages work." ;; esac
 case " $picked " in *" autoframe "*) info "4K auto framing was reported to make the camera fail (S918B); turn it off if the camera fails to open." ;; esac
+case " $picked " in *" weather "*) info "Weather effect: Wallpaper and style > Lock screen > Weather > Done. It animates only for rain, snow, fog or daytime sun." ;; esac
 case " $picked " in *" bargein "*) info "Bixby barge-in is untested; turn it off if anything misbehaves." ;; esac
 case " $picked " in *" hotspot6g "*) info "6 GHz hotspot: Settings > Connections > Mobile Hotspot > Band > 6 GHz (security must be WPA3)." ;; esac
+case " $picked " in *" dual5g "*) info "Dual SIM 5G: the modem restarts once (~15 s without signal). Original modem file: Download/s23tweaks-modem-backup. Undo: un-pick it and apply." ;; esac
 case " $picked " in *" india "*) info "India config: the phone reports itself as the Indian model so Samsung Wallet India (UPI) and the 6 GHz hotspot work. If Samsung Wallet still says 'not supported', clear its storage (Settings > Apps > Samsung Wallet > Storage > Clear data) and reopen it." ;; esac
 if [ "$auto" = on ]; then
   info "At each boot DFRoot roots the phone by itself and the tweaks re-apply about a minute later (the screen"
