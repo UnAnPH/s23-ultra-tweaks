@@ -643,6 +643,39 @@ directorsview_pref() {
   cat $R/camprefs.new > $CAM_PREFS; rm -f $R/camprefs.new   # cat keeps the file's owner and label
   log "camextras: Director's view shown (Camera > More)"
 }
+# wideflash: Samsung Camera reads SUPPORT_FLASH_IN_WIDE_LENS only as the *default* of its own setting
+# flash_in_wide_lens (Camera Assistant's wide-flash option toggles it). A camera that has been used saves
+# that setting as 0, which keeps the 0.6x flash off however camera-feature.xml says. Turn it on once
+# (remembering the value before, for unpicking and cleanup); after that a choice made in Camera
+# Assistant is kept.
+WF_UNDO=$V/undo/flash_in_wide
+wideflash_pref() {
+  # no settings file: storage still locked at boot (the last apply's edit stands), or the camera was
+  # never opened, so its default comes from camera-feature.xml, which this tweak turns on
+  [ -f $CAM_PREFS ] || return 0
+  [ -f $WF_UNDO ] && return 0
+  v=$(sed -n 's|.*<string name="flash_in_wide_lens">\([^<]*\)</string>.*|\1|p' $CAM_PREFS)
+  [ "$v" = 1 ] && return 0
+  am force-stop com.sec.android.app.camera
+  mkdir -p $R $V/undo; echo "${v:-absent}" > $WF_UNDO
+  if [ -n "$v" ]; then
+    sed 's|<string name="flash_in_wide_lens">[^<]*</string>|<string name="flash_in_wide_lens">1</string>|' $CAM_PREFS > $R/camprefs.new
+  else
+    awk '/<\/map>/ { print "    <string name=\"flash_in_wide_lens\">1</string>" } { print }' $CAM_PREFS > $R/camprefs.new
+  fi
+  grep -q '<string name="flash_in_wide_lens">1</string>' $R/camprefs.new && grep -q '</map>' $R/camprefs.new ||
+    { rm -f $R/camprefs.new $WF_UNDO; log "wideflash: couldn't edit the camera settings; turn on the wide-lens flash in Camera Assistant instead"; return; }
+  cat $R/camprefs.new > $CAM_PREFS; rm -f $R/camprefs.new   # cat keeps the file's owner and label
+  log "wideflash: Camera's wide-lens flash setting turned on (it was ${v:-unset})"
+}
+# put the setting back the way it was before wideflash_pref changed it
+wideflash_unpref() {
+  [ -f $WF_UNDO ] && [ -f $CAM_PREFS ] || return 1
+  v=$(cat $WF_UNDO); am force-stop com.sec.android.app.camera; mkdir -p $R
+  if [ "$v" = absent ]; then grep -v 'name="flash_in_wide_lens"' $CAM_PREFS > $R/camprefs.new
+  else sed "s|<string name=\"flash_in_wide_lens\">[^<]*</string>|<string name=\"flash_in_wide_lens\">$v</string>|" $CAM_PREFS > $R/camprefs.new; fi
+  grep -q '</map>' $R/camprefs.new && cat $R/camprefs.new > $CAM_PREFS && rm -f $R/camprefs.new $WF_UNDO
+}
 
 # ---------- Payload tweaks: camerahdr, hdr2023, audioeraser, colortone, galaxyai (files in $D/payload/<tweak>) ----------
 # Linux stacks at most two overlays on a path, so the tweaks don't mount their own. Each one stages the
@@ -2008,6 +2041,8 @@ $CF_PROFPS"
   if has deepdoze; then battery_doze_on; else battery_doze_off; fi
   if has debloat; then features_pkgs_off; else features_pkgs_on; fi
   has camextras && directorsview_pref
+  if has wideflash; then wideflash_pref
+  elif [ -f $WF_UNDO ]; then wideflash_unpref && log "wideflash: not picked; the camera's wide-lens flash setting is back as it was"; fi
   has callscreen && callscreen_apply
   if has weather; then weather_apply
   elif wx_stub; then pm uninstall $WX_PKG >/dev/null 2>&1 && log "weather: not picked; AI Core stub uninstalled"; fi
@@ -2126,6 +2161,7 @@ cleanup)
     else sed "s|<string name=\"directors_view_mode\">[^<]*</string>|<string name=\"directors_view_mode\">$v</string>|" $CAM_PREFS > $R/camprefs.new; fi
     grep -q '</map>' $R/camprefs.new && cat $R/camprefs.new > $CAM_PREFS && say "Camera setting restored"
   fi
+  wideflash_unpref && say "Camera's wide-lens flash setting restored"
   # parsed manifests of the apps the tweaks swap, in case a restart cached one; Android re-parses them
   for n in SamsungSmartSuggestions SketchBook CallAssistant SecSettingsIntelligence SecSettings EnvironmentAdaptiveDisplay MoseyApp SamsungCamera; do
     rm -f /data/system/package_cache/*/$n-[0-9]*; done

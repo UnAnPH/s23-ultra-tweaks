@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.7.2
+
+- **Fix: Chromium browsers such as Vivaldi crashing on launch with `hideksu` on** ("GPU process isn't usable. Goodbye."). Some apps run their own app zygote (`<package>_zygote`) to start their sandboxed processes. It inherits Android's zygote's open files, which include the framework resource overlays, such as the `display` tweak's `/product/overlay/s23tweaks-aodbright.apk`. On every fork, zygote code reopens those files by path. Once `hidemnt` had detached the module's mounts in the app zygote's namespace, the reopen failed (`Failed open(/product/overlay/s23tweaks-aodbright.apk)`), so the sandboxed GPU and renderer processes died before they started. In an app zygote's namespace (the zygote and the sandboxed children that share it), `hidemnt` now keeps only the mounts that hold a file the app zygote has open, which is `/product/overlay` here, and detaches every other module mount. The app's own process still sees no module mounts. Seen with Vivaldi 8.3 on an S23 Ultra: it crashed on every launch, and after the fix it opens normally.
+
+## v1.7.1
+
+- **Fix: `wideflash` did nothing on a camera that had been used before.** Samsung Camera reads `SUPPORT_FLASH_IN_WIDE_LENS` only as the default of its own setting, `flash_in_wide_lens` (the switch behind Camera Assistant's wide-flash option). A camera that has already been opened saves that setting as `0`, so the 0.6x lens kept the flash greyed out even with the feature switch on. The apply now turns the setting on once, after stopping the Camera and with the earlier value saved. Unpicking `wideflash` or running cleanup puts it back exactly as it was. After that first apply, a choice made in Camera Assistant is kept. Seen on an S23 Ultra (S918W) where the Camera had been used: the flash is greyed out at 0.6x on v1.7.0 and works after this fix.
+
 ## v1.7.0
 
 - `vulkan`'s description now says it can make some lock screen animations stutter more, such as Samsung's stretchable clocks between AOD and the lock screen (issue #27: turning it off brought that back to stock).

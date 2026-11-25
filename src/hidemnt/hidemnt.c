@@ -320,6 +320,87 @@ static int collect_mounts(int pid, char mps[][PATH_MAX_])
 	return n;
 }
 
+/* parent pid from /proc/<pid>/stat, or -1 */
+static int proc_ppid(int pid)
+{
+	char p[64], buf[512];
+	snprintf(p, sizeof(p), "/proc/%d/stat", pid);
+	int fd = open(p, O_RDONLY | O_CLOEXEC);
+	if (fd < 0)
+		return -1;
+	ssize_t r = read(fd, buf, sizeof(buf) - 1);
+	close(fd);
+	if (r <= 0)
+		return -1;
+	buf[r] = '\0';
+	char *c = strrchr(buf, ')');		/* comm can hold spaces; fields resume after the last ')' */
+	int ppid = -1;
+	if (!c || sscanf(c + 1, " %*c %d", &ppid) != 1)
+		return -1;
+	return ppid;
+}
+
+/* same mount namespace? */
+static int same_ns(int a, int b)
+{
+	char p[64];
+	struct stat sa, sb;
+	snprintf(p, sizeof(p), "/proc/%d/ns/mnt", a);
+	if (stat(p, &sa) != 0)
+		return 0;
+	snprintf(p, sizeof(p), "/proc/%d/ns/mnt", b);
+	if (stat(p, &sb) != 0)
+		return 0;
+	return sa.st_ino == sb.st_ino && sa.st_dev == sb.st_dev;
+}
+
+/* An app zygote ("<pkg>_zygote", used by Chromium browsers and others to spawn their sandboxed
+ * processes) inherits Android's zygote's open files, which include the framework resource overlays,
+ * e.g. the display tweak's /product/overlay/s23tweaks-aodbright.apk. On every fork, zygote code
+ * reopens each such file by path, and aborts ("Failed open(...)") if the path is gone. So in an app
+ * zygote's namespace (the zygote itself, or a sandboxed child that shares it) the mounts that hold a
+ * file the app zygote has open must stay. Returns the app zygote's pid, or 0 if pid isn't in one. */
+static int app_zygote_of(int pid)
+{
+	char name[256];
+	size_t n;
+	int cand[2] = { pid, proc_ppid(pid) };
+	for (int i = 0; i < 2; i++) {
+		if (cand[i] <= 0 || proc_name(cand[i], name, sizeof(name)) != 0)
+			continue;
+		n = strlen(name);
+		if (n > 7 && strcmp(name + n - 7, "_zygote") == 0 && (i == 0 || same_ns(pid, cand[i])))
+			return cand[i];
+	}
+	return 0;
+}
+
+/* true if mount point mp holds a file the process zpid has open (path == mp or under mp/) */
+static int mount_in_use(int zpid, const char *mp)
+{
+	char p[64], fp[PATH_MAX_ + 16], tgt[PATH_MAX_];
+	snprintf(p, sizeof(p), "/proc/%d/fd", zpid);
+	DIR *d = opendir(p);
+	if (!d)
+		return 0;
+	size_t ml = strlen(mp);
+	int used = 0;
+	struct dirent *e;
+	while (!used && (e = readdir(d))) {
+		if (e->d_name[0] == '.')
+			continue;
+		snprintf(fp, sizeof(fp), "%s/%s", p, e->d_name);
+		ssize_t r = readlink(fp, tgt, sizeof(tgt) - 1);
+		if (r <= 0)
+			continue;
+		tgt[r] = '\0';
+		if (strncmp(tgt, mp, ml) == 0 && (tgt[ml] == '\0' || tgt[ml] == '/'))
+			used = 1;
+	}
+	closedir(d);
+	return used;
+}
+
 /* enter pid's mount namespace and detach every module mount. returns mounts removed, -1 on setns fail. */
 static int hide_in(int pid)
 {
@@ -327,6 +408,17 @@ static int hide_in(int pid)
 	int n = collect_mounts(pid, mps);
 	if (n == 0)
 		return 0;
+	/* in an app zygote's namespace, keep the mounts behind its open files (see app_zygote_of) */
+	int zpid = app_zygote_of(pid);
+	if (zpid > 0) {
+		int k = 0;
+		for (int i = 0; i < n; i++)
+			if (!mount_in_use(zpid, mps[i]))
+				memmove(mps[k++], mps[i], PATH_MAX_);
+		n = k;
+		if (n == 0)
+			return 0;
+	}
 	char p[64];
 	snprintf(p, sizeof(p), "/proc/%d/ns/mnt", pid);
 	int fd = open(p, O_RDONLY | O_CLOEXEC);
