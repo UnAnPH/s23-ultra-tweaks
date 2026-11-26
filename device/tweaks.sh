@@ -2689,6 +2689,11 @@ report)
       want && /AndroidRuntime: [A-Za-z0-9_.$]+(Exception|Error)/ { e = $0; sub(/.*AndroidRuntime: /, "", e); k = p " | " substr(e, 1, 160)
         n[k]++; last[k] = t; if (!(k in seen)) { seen[k] = 1; o[++m] = k }; want = 0 }
       END { for (i = m; i >= 1; i--) printf "%dx  %s | %s\n", n[o[i]], last[o[i]], o[i] }' | head -n 20
+    sec "the last 3 app crashes with their stack traces (first 40 lines each)"
+    logcat -d -b crash -v threadtime 2>/dev/null | awk '
+      / AndroidRuntime: FATAL EXCEPTION/ { b++; pid[b] = $3; n[b] = 0 }
+      b && $3 == pid[b] && $6 ~ /^AndroidRuntime/ { if (n[b]++ < 40) t[b] = t[b] $0 "\n" }
+      END { for (i = (b > 3 ? b - 2 : 1); i <= b; i++) printf "%s\n", t[i] }' | cut -c1-300
     sec "recorded log (the module's recorder keeps the last hour or more; names in quotes masked)"
     if [ -z "$(rec_files)" ]; then
       echo "nothing recorded yet: the recorder starts at boot and at every apply (started now; the next report will have it)"
