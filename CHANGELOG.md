@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **`weather`: say what to do when Samsung's own AI Core is installed** (issue #40). The module leaves a real AI Core in place instead of installing its stub, and the log said it "answers the editor itself". On the S23 it doesn't: it asks for an add-on download that fails with *Timeout or response error*. The log now says to uninstall Samsung AI Core and apply again.
+- **`weather`: say what to do when Samsung's own AI Core is installed** (issue #40). The module leaves a real AI Core in place instead of installing its stub, and the log said it "answers the editor itself". On the S23 it doesn't: it asks for an add-on download that fails with *Timeout or response error*. The log now says to uninstall Samsung AI Core, if Android allows it, and apply again. A built-in AI Core can't be replaced yet. The status line shows AI Core's version and path.
 
 ## v1.8.8
 

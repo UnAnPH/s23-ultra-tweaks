@@ -1436,7 +1436,7 @@ weather_apply() {   # after the framework restart, so the package manager is set
   if wx_live_off; then pm enable --user 0 $WX_LIVE >/dev/null 2>&1 && log "weather: Samsung's live wallpaper app was disabled; turned it back on"; fi
   # A real AI Core answers the editor itself on phones Samsung ships the weather model for. On the S23
   # it asks for an add-on download that fails ("Timeout or response error", issue #40), so say so.
-  if wx_real; then log "weather: Samsung's own AI Core is installed, so the stub isn't; if the lock screen editor's Weather asks to download an add-on and fails, uninstall Samsung AI Core (Settings > Apps) and apply again"
+  if wx_real; then log "weather: Samsung's own AI Core is installed, so the stub isn't; if the lock screen editor's Weather asks to download an add-on and fails, uninstall Samsung AI Core (Settings > Apps) if Android allows it and apply again (a built-in AI Core can't be replaced yet)"
   elif [ "$(wx_code)" = $WX_VER ] && wx_stub; then :
   else
     T=/data/local/tmp/s23t-aicore-stub.apk   # the installer can't read files under /data/adb
