@@ -306,6 +306,7 @@ details .inner { padding: 0 16px 14px; }
         <button class="btn" id="wifi7page" type="button">Open Wi-Fi 7 settings page</button>
         <button class="btn danger" id="unflag" type="button">Remove Play services flags</button>
       </div>
+      <p class="hint">Something didn't work, such as an AirDrop share, Wi-Fi or an app? Tap <b>Make a bug report</b> afterwards (within an hour or so) and attach the file. The module keeps a log of the last hour or more, so the report already shows what happened. No need to record anything first.</p>
       <details id="bootlog">
         <summary>Boot log</summary>
         <div class="inner"><pre id="bootlog-pre">Loading…</pre></div>
@@ -1045,7 +1046,7 @@ async function onReport(e) {
   done(); b.disabled = false; b.textContent = label;
   if (r.errno !== 0 || r2.errno !== 0) { showError("Couldn't make the bug report", r.errno !== 0 ? r : r2); return; }
   const body = h("div", {},
-    h("p", { text: "Saved as " + path.replace("/sdcard/", "") + ". It lists your phone model and firmware, which tweaks are on and why others aren't offered, the camera and feature settings the tweaks change, the last apply log and recent crash summaries. Serial number, email and MAC addresses are left out." }),
+    h("p", { text: "Saved as " + path.replace("/sdcard/", "") + ". It lists your phone model and firmware, which tweaks are on and why others aren't offered, the camera and feature settings the tweaks change, the last apply log, recent crash summaries, and the AirDrop, Wi-Fi and crash lines from the last hour or more of the phone's log. Serial number, email and MAC addresses, long numbers and quoted names are left out." }),
     h("p", { class: "small", text: "Attach the file, or paste the copied text, in a new issue at " + ISSUES_URL + " or wherever you're reporting, with what you expected and what happened." }),
     h("pre", { text: r2.stdout }));
   if (!(await confirmDialog({ title: "Bug report ready", body, ok: "Copy text" }))) return;
@@ -1053,7 +1054,7 @@ async function onReport(e) {
 }
 
 // AirDrop test: records the logs while the user tries one share, then says which stage it reached.
-// The report alone can't: the phone's log buffers cover only minutes, and it keeps warnings only.
+// The report's recorded log covers this too; the test adds a before/after snapshot of one attempt.
 const AIRDROP_TEST_SECS = 90;
 async function onAirdropTest(e) {
   const steps = h("ol", {},

@@ -177,6 +177,12 @@ wait_for() { n=$1; shift; while [ $n -gt 0 ]; do "$@" && return 0; n=$((n-1)); s
 mounted() { mount | grep -q " $1 type $2"; }
 bound() { mount | grep -q " $1 "; }
 running() { ps -A -o ARGS | grep -q "[t]weaks.sh $1"; }
+# The recorder keeps the recent Android log (Info and up, about 8 MB: an hour or more on most phones) and
+# the kernel's Wi-Fi/AirDrop lines in $REC, so a report made after something went wrong already holds
+# what happened: no timed test needed. Root-only files; the report takes filtered, masked lines from them.
+REC=$V/rec
+rec_start() { running recorder || setsid sh $D/tweaks.sh recorder </dev/null >/dev/null 2>&1 & }
+rec_files() { for f in $REC/log.3 $REC/log.2 $REC/log.1 $REC/log; do [ -f $f ] && echo $f; done; }
 has() { case " $TWEAKS " in *" $1 "*) return 0 ;; esac; return 1; }
 # cam24fps and slowmo4k120 were folded into profps (they share the same Camera APK patch and
 # camera-feature.xml edit). A saved picks list from an older module may still name them: map both
@@ -207,6 +213,37 @@ nearby_live() {
   [ -f $f ] || { echo "no Nearby config file yet"; return; }
   c=0; t=0; for x in $NEARBY_FLAGS; do t=$((t + 1)); grep -qF "$x" $f && c=$((c + 1)); done
   echo "$c of $t in Play services' live Nearby config$([ $c -lt $t ] && echo "; apply again to put them back")"
+}
+# ad_verdict LOG KMSG "MOSEY_PIDS" "advice when nothing logged": counts one AirDrop attempt's stages in a
+# logcat file (threadtime) and its kernel lines, and sets $v to which stage it reached. rel() then prints the
+# relevant lines. Used by airdrop-test and, on the recorder's log, by the report.
+ad_verdict() {
+  # the Mosey app's processes (it starts only when Quick Share hands it a share). mosey_server is a lazy
+  # service that the module's loop restarts every few seconds, so its start-up lines are left out of the counts
+  apids=" $3 $(pidof com.google.android.mosey) $(awk '/am_proc_start/ && /com\.google\.android\.mosey[],]/ { sub(/.*am_proc_start[^[]*\[[0-9]+,/, ""); sub(/,.*/, ""); print }' $1 | tr '\n' ' ') "
+  rel() { awk -v p="$apids" '{ if (($3 ~ /^[0-9]+$/ && index(p, " " $3 " ")) || $0 ~ /[Mm]osey|[Aa]irdrop|AirDrop|[Aa]wdl|AWDL|NearbySharing|ShareLive|QuickShare|Wonder/) print }' $1 | grep -v '	at '; }
+  idle='AidlLazyServiceRegistrar|reset mosey network resources|Interface is gone, nothing to shutdown|Registering service com\.google\.android\.moseyservice'
+  # Quick Share: its screens opening (activity events), and its log lines (it also logs in the background)
+  nui=$(grep -E 'wm_on_(create|resume)_called|wm_(create|restart|resume)_activity|am_focused' $1 | grep -c sharelive)
+  nsl=$(grep -cE 'ShareLive|QuickShare' $1)
+  napp=$(awk -v p="$apids" '($3 ~ /^[0-9]+$/ && index(p, " " $3 " ")) || $6 ~ /^Mosey/' $1 | grep -c .)
+  nsrv=$(grep -E ' (mosey_server|mosey_daemon)' $1 | grep -cvE "$idle")
+  nst=$(grep -cE 'am_proc_start.*com\.google\.android\.mosey[],]' $1)
+  nmo=$((napp + nst))   # the app is what runs a share; mosey_server alone logs housekeeping too
+  nk=$(grep -ciE 'wonder|awdl|llw' $2)
+  # Play services loading Mosey as a share target: its external provider registry, then the bind
+  nreg=$(grep -cE 'NearbySharing: (Starting external provider registry|Bound to provider ComponentInfo\{com\.google\.android\.mosey)' $1)
+  nohand="the share never reached the AirDrop side (Share with Apple devices not shown or not tapped, or Play services didn't hand the share to Mosey)"
+  if [ $nmo -gt 0 ]; then
+    if [ $nk -gt 0 ]; then v="Mosey ran and the Wi-Fi driver logged AirDrop link activity: the log shows how far it got"
+    else v="Mosey ran; the kernel log has no AirDrop link lines: the log shows how far Mosey got"; fi
+  elif [ $nui -gt 0 ] && [ $nreg = 0 ]; then
+    v="Quick Share opened, but Play services never loaded Mosey (no external provider registry): its Nearby flags aren't in effect. Apply again (it rewrites them and restarts Play services), then retry"
+  elif [ $nui -gt 0 ]; then
+    if [ $nsrv -gt 0 ]; then v="Quick Share opened, but the Mosey app never started (only mosey_server logged, $nsrv lines): $nohand"
+    else v="Quick Share opened, but Mosey logged nothing: $nohand"; fi
+  elif [ $nsl -gt 0 ]; then v="Mosey logged nothing. Quick Share logged $nsl lines but no screen of it opened; if you did share, $nohand"
+  else v="Neither Quick Share nor Mosey logged anything: $4"; fi
 }
 AD_SUM=$V/airdrop-test.summary   # the last airdrop-test's verdict, shown in the report
 # what logcat holds: a busy phone fills the main buffer in minutes, so a missing line may just be old
@@ -2240,6 +2277,7 @@ apply)
   else take_lock || { echo "another apply is already running (see $L)" >&2; exit 3; }; fi
   trap 'rm -rf $APPLY_LOCK' EXIT
   [ -e $REMOVED ] && { : > $L; fail "$REMOVED_MSG"; }
+  rec_start
   picks=$(migrate_choices "$2")
   TWEAKS=" $picks "; : > $L
   [ "$picks" = "$2" ] || log "choices: cam24fps and slowmo4k120 are part of profps now; applying profps"
@@ -2403,6 +2441,22 @@ loop)
   # (as root it fails to open /dev/tun). It's a lazy service that exits when idle: restart it.
   while true; do $AIR/moseyrun; sleep 1; done
   ;;
+recorder)
+  # logcat rotates its own files (-r KB, -n count). It's restarted if it ever ends; -T 1 then starts at
+  # the newest line instead of copying the whole buffer in again.
+  mkdir -p $REC; chmod 700 $REC; t=""
+  ( while true; do logcat -b main,system,events,crash -v threadtime $t -f $REC/log -r 2048 -n 3 '*:I' 2>/dev/null; t="-T 1"; sleep 10; done ) &
+  # dmesg -W waits for new kernel lines (no polling); only Wi-Fi/AirDrop ones are kept, trimmed to ~1 MB
+  while true; do
+    dmesg -W 2>/dev/null | grep --line-buffered -iE 'wonder|awdl|llw|wlan|cnss|firmware|mosey' |
+      grep --line-buffered -vE 'Runtime (suspend|resume)|PCI link|MHI state' | {
+        n=0; while IFS= read -r l; do
+          echo "$(date '+%m-%d %H:%M:%S') $l" >> $REC/kernel; n=$((n + 1))
+          if [ $n -ge 500 ]; then n=0; [ "$(wc -c < $REC/kernel)" -gt 1048576 ] && tail -c 524288 $REC/kernel > $REC/kernel.t && mv $REC/kernel.t $REC/kernel; fi
+        done; }
+    sleep 10
+  done
+  ;;
 guard)
   # If the Wi-Fi firmware ever crashes, the S24 driver's recovery leaks the AirDrop interface and
   # ~50 s later the phone hard-resets. Stop the daemon, keep the log, and reboot cleanly instead.
@@ -2534,32 +2588,7 @@ airdrop-test)
   after=$(snap)
   # the test's kernel lines (/dev/kmsg works where dmesg can't; each record is "level,number,microseconds,-;text")
   timeout 1 cat /dev/kmsg 2>/dev/null | awk -v k0=$k0 '{ split($0, a, ","); if (a[2] + 0 > k0 + 0) { t = a[3] / 1000000; sub(/^[^;]*;/, ""); printf "[%10.3f] %s\n", t, $0 } }' > $kr
-  # the Mosey app's processes (it starts only when Quick Share hands it a share). mosey_server is a lazy
-  # service that the module's loop restarts every few seconds, so its start-up lines are left out of the counts
-  apids=" $ap0 $(pidof com.google.android.mosey) $(awk '/am_proc_start/ && /com\.google\.android\.mosey[],]/ { sub(/.*am_proc_start[^[]*\[[0-9]+,/, ""); sub(/,.*/, ""); print }' $raw | tr '\n' ' ') "
-  rel() { awk -v p="$apids" '{ if (index(p, " " $3 " ") || $0 ~ /[Mm]osey|[Aa]irdrop|AirDrop|[Aa]wdl|AWDL|NearbySharing|ShareLive|QuickShare|Wonder/) print }' $raw | grep -v '	at '; }
-  idle='AidlLazyServiceRegistrar|reset mosey network resources|Interface is gone, nothing to shutdown|Registering service com\.google\.android\.moseyservice'
-  # Quick Share: its screens opening (activity events), and its log lines (it also logs in the background)
-  nui=$(grep -E 'wm_on_(create|resume)_called|wm_(create|restart|resume)_activity|am_focused' $raw | grep -c sharelive)
-  nsl=$(grep -cE 'ShareLive|QuickShare' $raw)
-  napp=$(awk -v p="$apids" 'index(p, " " $3 " ") || $6 ~ /^Mosey/' $raw | grep -c .)
-  nsrv=$(grep -E ' (mosey_server|mosey_daemon)' $raw | grep -cvE "$idle")
-  nmo=$((napp + nst))   # the app is what runs a share; mosey_server alone logs housekeeping too
-  nst=$(grep -cE 'am_proc_start.*com\.google\.android\.mosey[],]' $raw)
-  nk=$(grep -ciE 'wonder|awdl|llw' $kr)
-  # Play services loading Mosey as a share target: its external provider registry, then the bind
-  nreg=$(grep -cE 'NearbySharing: (Starting external provider registry|Bound to provider ComponentInfo\{com\.google\.android\.mosey)' $raw)
-  nohand="the share never reached the AirDrop side (Share with Apple devices not shown or not tapped, or Play services didn't hand the share to Mosey)"
-  if [ $nmo -gt 0 ]; then
-    if [ $nk -gt 0 ]; then v="Mosey ran and the Wi-Fi driver logged AirDrop link activity: the log shows how far it got"
-    else v="Mosey ran; the kernel log has no AirDrop link lines: the log shows how far Mosey got"; fi
-  elif [ $nui -gt 0 ] && [ $nreg = 0 ]; then
-    v="Quick Share opened, but Play services never loaded Mosey (no external provider registry): its Nearby flags aren't in effect. Apply again (it rewrites them and restarts Play services), then retry"
-  elif [ $nui -gt 0 ]; then
-    if [ $nsrv -gt 0 ]; then v="Quick Share opened, but the Mosey app never started (only mosey_server logged, $nsrv lines): $nohand"
-    else v="Quick Share opened, but Mosey logged nothing: $nohand"; fi
-  elif [ $nsl -gt 0 ]; then v="Mosey logged nothing. Quick Share logged $nsl lines but no screen of it opened; if you did share, $nohand"
-  else v="Neither Quick Share nor Mosey logged anything: start the test, then share within $secs s"; fi
+  ad_verdict $raw $kr "$ap0" "start the test, then share within $secs s"
   { echo "$(date '+%Y-%m-%d %H:%M'), $secs s: $v"
     echo "  Quick Share screens opened $nui, Quick Share lines $nsl, Mosey app lines $napp, mosey_server lines $nsrv (its idle restarts not counted), Mosey app starts $nst, Play services loading Mosey $nreg, AirDrop link kernel lines $nk"
     echo "  before:"; echo "$before" | sed 's/^/  /'; echo "  after:"; echo "$after" | sed 's/^/  /'
@@ -2567,7 +2596,7 @@ airdrop-test)
   { echo "s23-ultra-tweaks AirDrop test, $(date '+%Y-%m-%d %H:%M:%S %z'), module $(mod_ver), $(getprop ro.product.model) $(getprop ro.build.PDA)"
     echo; cat $AD_SUM
     echo; echo "===== Mosey, Quick Share and Nearby lines (all levels, names in quotes masked) ====="
-    rel | sed -E "s/\"[^\"]*\"/<name>/g; s/'[^']*'/<name>/g" | tail -n 4000 | cut -c1-400
+    rel $raw | sed -E "s/\"[^\"]*\"/<name>/g; s/'[^']*'/<name>/g" | tail -n 4000 | cut -c1-400
     echo; echo "===== kernel log during the test ====="
     grep -vE 'Runtime (suspend|resume)|PCI link|MHI state' $kr | tail -n 1500 | cut -c1-300
   } 2>&1 | scrub > $out
@@ -2653,7 +2682,25 @@ report)
       want && /AndroidRuntime: [A-Za-z0-9_.$]+(Exception|Error)/ { e = $0; sub(/.*AndroidRuntime: /, "", e); k = p " | " substr(e, 1, 160)
         n[k]++; last[k] = t; if (!(k in seen)) { seen[k] = 1; o[++m] = k }; want = 0 }
       END { for (i = m; i >= 1; i--) printf "%dx  %s | %s\n", n[o[i]], last[o[i]], o[i] }' | head -n 20
+    sec "recorded log (the module's recorder keeps the last hour or more; names in quotes masked)"
+    if [ -z "$(rec_files)" ]; then
+      echo "nothing recorded yet: the recorder starts at boot and at every apply (started now; the next report will have it)"
+    else
+      mkdir -p $R; cat $(rec_files) > $R/rec.log; touch $REC/kernel
+      echo "covers $(awk 'NF > 5 { print $1, substr($2, 1, 8); exit }' $R/rec.log) to $(tail -n 1 $R/rec.log | cut -c1-14), recorder $(running recorder && echo running || echo "not running (started now)")"
+      ad_verdict $R/rec.log $REC/kernel "" "no share was tried in this time"
+      echo "AirDrop in this time: $v"
+      echo "  Quick Share screens opened $nui, Quick Share lines $nsl, Mosey app lines $napp, mosey_server lines $nsrv, Mosey app starts $nst, Play services loading Mosey $nreg, AirDrop link kernel lines $nk"
+      echo; echo "--- AirDrop, Quick Share and Nearby lines; Wi-Fi and Wallet warnings and errors; crashes; this module (last 3000) ---"
+      awk -v p="$apids" '($3 ~ /^[0-9]+$/ && index(p, " " $3 " ")) || /[Mm]osey|[Aa]irdrop|AirDrop|[Aa]wdl|AWDL|NearbySharing|ShareLive|QuickShare|MCFQS|Wonder/ ||
+        ($5 ~ /^[EWF]$/ && /[Ww]ifi|wpa_supplicant|[Ww]allet|SPAY|[Ss]pay/) || / (AndroidRuntime|DEBUG) *:|am_crash|am_anr|s23tweaks/' $R/rec.log |
+        grep -v '	at ' | sed -E "s/\"[^\"]*\"/<name>/g; s/'[^']*'/<name>/g" | tail -n 3000 | cut -c1-300
+      echo; echo "--- kernel: Wi-Fi and AirDrop lines (last 400) ---"
+      tail -n 400 $REC/kernel | cut -c1-300
+      rm -f $R/rec.log
+    fi
   } 2>&1 | scrub > $out
+  rec_start
   echo "$out"
   ;;
 dual5g-restore)
@@ -2700,6 +2747,7 @@ boot)
   B=$V/boot.log
   blog() { echo "$(date '+%F %T') $*" >> $B; }
   note() { cmd notification post -S bigtext -t "S23 tweaks" s23tweaks "$1" >/dev/null 2>&1; }
+  rec_start
   [ -f $V/autostart ] || exit 0
   t=$(migrate_choices "$(cat $V/choices 2>/dev/null)"); [ -n "$t" ] || exit 0
   # KernelSU can run boot scripts more than once per boot (seen with DFRoot's late load): only the

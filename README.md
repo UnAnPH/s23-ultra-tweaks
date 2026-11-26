@@ -204,7 +204,9 @@ with what you expected and what happened. Without the module page:
 adb shell su -c "sh /data/adb/modules/s23_ultra_tweaks/tweaks.sh report"
 ```
 
-**AirDrop doesn't find the Apple device or doesn't send?** First run Status → **Record an AirDrop test**: it records 90 seconds of logs while you try one share, says which stage the share reached, and saves the log in Download. Then make the bug report (it includes the test's result) and attach both files. Without the module page: `adb shell su -c "sh /data/adb/modules/s23_ultra_tweaks/tweaks.sh airdrop-test 90"`, then share within the 90 seconds.
+**Something doesn't work?** Right after it fails (within an hour or so), open the module page → Status → **Make a bug report** and attach the file to your issue. The module keeps a log of the last hour or more: AirDrop, Quick Share and Nearby lines, Wi-Fi and Samsung Wallet warnings, crashes, and the kernel's Wi-Fi lines. So the report already shows what happened, including how far the last AirDrop share got. Personal data is masked.
+
+**AirDrop doesn't find the Apple device or doesn't send?** The bug report is enough. Status → **Record an AirDrop test** adds a before/after snapshot of one attempt if asked for: it records 90 seconds of logs while you try one share, says which stage the share reached, and saves the log in Download. Without the module page: `adb shell su -c "sh /data/adb/modules/s23_ultra_tweaks/tweaks.sh airdrop-test 90"`, then share within the 90 seconds.
 
 The report has the phone model, firmware, kernel and app versions, which tweaks are on and why any
 aren't offered, the camera and feature settings the tweaks change (and what the phone had before),

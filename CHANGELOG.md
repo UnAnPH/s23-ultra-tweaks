@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **The bug report now holds the last hour or more of logs, so a failure can be reported after the fact.** Until now, the report's logs covered only the last few minutes, so users had to follow timed steps: start a recording, then share within 90 seconds, or make the report right away. The module now runs a recorder from boot (and from every apply). It keeps Android's log at Info level and up, in rotating files of about 8 MB in `/data/adb/s23tweaks/rec`, plus the kernel's Wi-Fi and AirDrop lines (about 1 MB). The report adds a "recorded log" section:
+  - how far AirDrop got in that time (the AirDrop test's verdict, run on the recorded log);
+  - the AirDrop, Quick Share and Nearby lines, Wi-Fi and Wallet warnings and errors, and crashes, with personal data masked;
+  - the kernel lines.
+  The module page and the README now say: when something fails, just make a bug report afterwards.
+- **AirDrop test: a counting slip fixed.** The Mosey app's lines were added up before the Mosey start count was taken, so a Mosey start alone didn't count. Lines too short to carry a process id could also count as Mosey lines.
+
 ## v1.8.8
 
 - **AirDrop test and report: spot Play services not loading Mosey** (issues #22, #39). A working share starts with Play services' Nearby loading Mosey as a share target (`Starting external provider registry`, `Bound to provider …mosey…ExternalSharingService`). In both failing reports that never happened, although the apply had logged "3 of 3 overrides present": that count comes from Play services' database right after the module writes it, not from what Play services uses later. A fresh apply fixed it on #39. The AirDrop test now counts those lines and, when Quick Share opened but Play services never loaded Mosey, says to apply again. The test and the report also show how many of the three Nearby flags are in Play services' live Nearby config.
