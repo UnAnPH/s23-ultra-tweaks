@@ -7,6 +7,7 @@
   - the AirDrop, Quick Share and Nearby lines, Wi-Fi and Wallet warnings and errors, and crashes, with personal data masked;
   - the kernel lines.
   The module page and the README now say: when something fails, just make a bug report afterwards.
+- **AirDrop test and report: spot Play services crashing on an incoming AirDrop share** (issue #41). Receiving from a Mac failed: Mosey accepted the transfer, Play services crashed as it was about to show the accept prompt, and the transfer was cancelled. On the Mac it kept saying *waiting*, and duplicates of the phone appeared. The verdict now names this case, the summary counts incoming shares and Play services' Nearby restarts, and crash stack traces are kept (in the test's log and the report's recorded log).
 - **AirDrop test: a counting slip fixed.** The Mosey app's lines were added up before the Mosey start count was taken, so a Mosey start alone didn't count. Lines too short to carry a process id could also count as Mosey lines.
 
 ## v1.8.8

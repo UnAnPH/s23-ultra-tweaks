@@ -233,8 +233,13 @@ ad_verdict() {
   nk=$(grep -ciE 'wonder|awdl|llw' $2)
   # Play services loading Mosey as a share target: its external provider registry, then the bind
   nreg=$(grep -cE 'NearbySharing: (Starting external provider registry|Bound to provider ComponentInfo\{com\.google\.android\.mosey)' $1)
+  # an AirDrop share to this phone (Mosey's receive side) and Play services' Nearby starting over (a crash)
+  nin=$(grep -c 'ContextTransferInitiated(context=.*clientName=ReceiveProvider' $1)
+  nrs=$(grep -c 'NearbySharing: NearbySharingService onCreate' $1)
   nohand="the share never reached the AirDrop side (Share with Apple devices not shown or not tapped, or Play services didn't hand the share to Mosey)"
-  if [ $nmo -gt 0 ]; then
+  if [ $nin -gt 0 ] && [ $nrs -gt 0 ]; then
+    v="An AirDrop share to this phone arrived ($nin), but Play services' Nearby restarted $nrs times (a crash), which cancels it: the crash lines below show why"
+  elif [ $nmo -gt 0 ]; then
     if [ $nk -gt 0 ]; then v="Mosey ran and the Wi-Fi driver logged AirDrop link activity: the log shows how far it got"
     else v="Mosey ran; the kernel log has no AirDrop link lines: the log shows how far Mosey got"; fi
   elif [ $nui -gt 0 ] && [ $nreg = 0 ]; then
@@ -2590,13 +2595,15 @@ airdrop-test)
   timeout 1 cat /dev/kmsg 2>/dev/null | awk -v k0=$k0 '{ split($0, a, ","); if (a[2] + 0 > k0 + 0) { t = a[3] / 1000000; sub(/^[^;]*;/, ""); printf "[%10.3f] %s\n", t, $0 } }' > $kr
   ad_verdict $raw $kr "$ap0" "start the test, then share within $secs s"
   { echo "$(date '+%Y-%m-%d %H:%M'), $secs s: $v"
-    echo "  Quick Share screens opened $nui, Quick Share lines $nsl, Mosey app lines $napp, mosey_server lines $nsrv (its idle restarts not counted), Mosey app starts $nst, Play services loading Mosey $nreg, AirDrop link kernel lines $nk"
+    echo "  Quick Share screens opened $nui, Quick Share lines $nsl, Mosey app lines $napp, mosey_server lines $nsrv (its idle restarts not counted), Mosey app starts $nst, Play services loading Mosey $nreg, incoming AirDrop shares $nin, Nearby restarts $nrs, AirDrop link kernel lines $nk"
     echo "  before:"; echo "$before" | sed 's/^/  /'; echo "  after:"; echo "$after" | sed 's/^/  /'
     echo "  log: $out"; } | scrub > $AD_SUM
   { echo "s23-ultra-tweaks AirDrop test, $(date '+%Y-%m-%d %H:%M:%S %z'), module $(mod_ver), $(getprop ro.product.model) $(getprop ro.build.PDA)"
     echo; cat $AD_SUM
     echo; echo "===== Mosey, Quick Share and Nearby lines (all levels, names in quotes masked) ====="
     rel $raw | sed -E "s/\"[^\"]*\"/<name>/g; s/'[^']*'/<name>/g" | tail -n 4000 | cut -c1-400
+    echo; echo "===== crashes during the test (with stack traces) ====="
+    awk '$6 ~ /^(AndroidRuntime|DEBUG|libc)$/ || / am_crash/ || (/ am_proc_died/ && /gms|mosey|sharelive/)' $raw | tail -n 400 | cut -c1-300
     echo; echo "===== kernel log during the test ====="
     grep -vE 'Runtime (suspend|resume)|PCI link|MHI state' $kr | tail -n 1500 | cut -c1-300
   } 2>&1 | scrub > $out
@@ -2690,11 +2697,12 @@ report)
       echo "covers $(awk 'NF > 5 { print $1, substr($2, 1, 8); exit }' $R/rec.log) to $(tail -n 1 $R/rec.log | cut -c1-14), recorder $(running recorder && echo running || echo "not running (started now)")"
       ad_verdict $R/rec.log $REC/kernel "" "no share was tried in this time"
       echo "AirDrop in this time: $v"
-      echo "  Quick Share screens opened $nui, Quick Share lines $nsl, Mosey app lines $napp, mosey_server lines $nsrv, Mosey app starts $nst, Play services loading Mosey $nreg, AirDrop link kernel lines $nk"
+      echo "  Quick Share screens opened $nui, Quick Share lines $nsl, Mosey app lines $napp, mosey_server lines $nsrv, Mosey app starts $nst, Play services loading Mosey $nreg, incoming AirDrop shares $nin, Nearby restarts $nrs, AirDrop link kernel lines $nk"
       echo; echo "--- AirDrop, Quick Share and Nearby lines; Wi-Fi and Wallet warnings and errors; crashes; this module (last 3000) ---"
       awk -v p="$apids" '($3 ~ /^[0-9]+$/ && index(p, " " $3 " ")) || /[Mm]osey|[Aa]irdrop|AirDrop|[Aa]wdl|AWDL|NearbySharing|ShareLive|QuickShare|MCFQS|Wonder/ ||
-        ($5 ~ /^[EWF]$/ && /[Ww]ifi|wpa_supplicant|[Ww]allet|SPAY|[Ss]pay/) || / (AndroidRuntime|DEBUG) *:|am_crash|am_anr|s23tweaks/' $R/rec.log |
-        grep -v '	at ' | sed -E "s/\"[^\"]*\"/<name>/g; s/'[^']*'/<name>/g" | tail -n 3000 | cut -c1-300
+        ($5 ~ /^[EWF]$/ && /[Ww]ifi|wpa_supplicant|[Ww]allet|SPAY|[Ss]pay/) || / (AndroidRuntime|DEBUG) *:|am_crash|am_anr|s23tweaks/ ||
+        (/ am_proc_died/ && /gms|mosey|sharelive/)' $R/rec.log |
+        awk '!/	at / || $6 ~ /^AndroidRuntime/' | sed -E "s/\"[^\"]*\"/<name>/g; s/'[^']*'/<name>/g" | tail -n 3000 | cut -c1-300
       echo; echo "--- kernel: Wi-Fi and AirDrop lines (last 400) ---"
       tail -n 400 $REC/kernel | cut -c1-300
       rm -f $R/rec.log
