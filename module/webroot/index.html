@@ -302,6 +302,7 @@ details .inner { padding: 0 16px 14px; }
       <div class="btns">
         <button class="btn" id="refresh" type="button">Refresh status</button>
         <button class="btn" id="report" type="button">Make a bug report</button>
+        <button class="btn" id="airdroptest" type="button">Record an AirDrop test</button>
         <button class="btn" id="wifi7page" type="button">Open Wi-Fi 7 settings page</button>
         <button class="btn danger" id="unflag" type="button">Remove Play services flags</button>
       </div>
@@ -383,13 +384,14 @@ const TWEAKS = [
   { id: "vulkan", cat: "display", name: "Vulkan rendering", desc: "Apps draw with Vulkan instead of OpenGL, as on the S24. Can make some lock screen animations (stretchable clocks) stutter more; unpick it if so." },
   { id: "weather", cat: "display", name: "Lock screen weather effect", desc: "Rain, snow, fog or sun animated over your lock screen wallpaper, following Samsung Weather. Brings back the Weather button in the lock screen editor (installs a 12 KB AI Core stub app; the AI-generated weather wallpapers stay off)" },
   { id: "galaxyai", cat: "ai", name: "Now Brief, Creative Studio, Call Assist", desc: "The S24's newer builds of these three Galaxy AI apps (219 MB download)" },
+  { id: "highlights", cat: "ai", name: "Notification highlights", desc: "Galaxy AI sorts important notifications to the top of the panel and summarizes long or repeated chats, on the phone. It also reveals the page (Settings > Notifications > Advanced settings > Notification highlights) that this build hides, so you can see both switches; summaries need a Samsung account, Language Core and one of the listed messaging apps, and appear while the screen is off." },
   { id: "audioeraser", cat: "ai", name: "Audio Eraser", desc: "Remove wind, noise, music or voices from videos in Gallery (34 MB download)" },
   { id: "settingssearch", cat: "ai", name: "Settings search", desc: "The S24's new Settings search bar; natural-language answers stay off (10 MB download)" },
   { id: "callscreen", cat: "ai", name: "Call screening", desc: "Installs Samsung Language Core: screening and voice messages work, the AI summary and replies don't. Stays after a reboot (3.1 GB download; Wi-Fi recommended)" },
   { id: "bargein", cat: "ai", name: "Bixby barge-in", desc: "Talk over Bixby while it answers, as on the S24 (untested)" },
   { id: "rambler", cat: "ai", name: "Gboard Rambler", desc: "The Pixel 10 and 11's Rambler voice typing in Gboard: Gemini turns natural speech into clean text, drops filler words and takes spoken edits (\u201cchange blue to green\u201d). Sets Gboard's own local flag overrides, the same set PixelBoard uses; needs Gboard 18 and an internet connection, and Google may limit daily use. Undo: un-pick it and apply." },
   { id: "battery", cat: "system", name: "Battery health", desc: "Settings → Battery → Battery information shows health and cycle count" },
-  { id: "features", cat: "system", name: "Power schedule and louder calls", desc: "Auto power on/off schedule and louder VoIP calls" },
+  { id: "features", cat: "system", name: "Power schedule and louder calls", desc: "Louder VoIP calls; the Auto power on/off schedule shows only on Chinese (CN) models" },
   { id: "hideksu", cat: "system", name: "HideKSU", desc: "Hide the KernelSU root manager from apps, so root-aware apps (CRED, banking) stop crashing. The launcher icon and DFRoot's boot root keep working (patched services.jar; needs the KernelSU manager installed; 12 MB download). Also hides the module's own mounts from the apps you list in /data/adb/s23tweaks/hide-apps.txt, so mount-scanning detectors don't see the tweaks" },
   { id: "callrec", cat: "carrier", name: "Call recording", desc: "Call recording in the Samsung Phone app" },
   { id: "india", cat: "carrier", name: "India carrier config (Airtel, Jio)", desc: "For Indian SIMs: the Indian carrier settings with the Use 5G standalone networks switch, call recording, Smart IVR and message cards, plus Samsung Wallet India (UPI, DigiLocker, transit) and the 6 GHz hotspot — it reports the phone as the Indian model while on (reverts on reboot; the sales code on disk is untouched, adding bank cards may still fail)" },
@@ -420,7 +422,7 @@ const IDS = TWEAKS.map(t => t.id);
 const WHERE = {
   airdrop: ["AirDrop", "On the Apple device set AirDrop to Everyone for 10 minutes; on the S23 share → Quick Share → Share with Apple devices."],
   battery: ["Battery health", "Settings → Battery → Battery information."],
-  features: ["Power schedule", "Search Settings for “power on/off” to find the schedule. Louder VoIP calls need no setting."],
+  features: ["Louder calls", "Louder VoIP calls need no setting. The Auto power on/off schedule (General management → Reset) appears only on Chinese (CN) models; Samsung's Settings checks the country too."],
   callrec: ["Call recording", "Phone app → Settings → Record calls."],
   nronly: ["LTE only and 5G only", "Settings → Connections → Mobile networks → Network mode (each SIM). 5G only drops to no signal where there is no standalone 5G."],
   natroam: ["No national roaming", "The R icon is gone on national roaming. Data roaming in Mobile networks now matters only abroad."],
@@ -435,10 +437,11 @@ const WHERE = {
   audioeraser: ["Audio Eraser", "Gallery → open a video → Edit → speaker icon → Audio eraser."],
   colortone: ["Adaptive color tone", "Settings → Display → Adaptive color tone."],
   galaxyai: ["Now Brief", "Turn on Settings → Galaxy AI → Personal data intelligence, then swipe right on the home screen. Creative Studio is in the app drawer."],
+  highlights: ["Notification highlights", "Nothing to set: both switches are on. Important notifications move to the top of the panel, and a long or repeated chat notification gets a summary when the screen is off. Only the messaging apps Android lists as summarizable produce them (WhatsApp, Messenger, Google and Samsung Messages, Telegram, Instagram and a few dozen more) and prioritizing works only in the languages its classifier knows. The on-device model itself is not on this phone: Samsung ships it as com.samsung.android.offline.language.model, and its version list covers sm8650 and newer, not the S23's sm8550. So both switches are on and the pipeline runs, but summaries stay empty until Samsung brings the model to this chipset."],
   camextras: ["Director's view", "Camera → More → Director's view. Horizon lock: Video → Super steady → Horizontal lock; it levels tilts up to about 20° on the 0.6× camera, not a full turn."],
   hdr2023: ["2023 ArcSoft HDR", "Nothing to set. Bracketed HDR (backlit scenes) is tested; hybrid HDR (ordinary daylight) loads but is untested. If photos look wrong, turn it off."],
   tenbit: ["Front-camera 10-bit", "Nothing to set. Apps that offer 10-bit or HDR video (HLG) now offer it on the selfie camera too; Samsung Camera already had its own."],
-  profps: ["Frame-rate unlocks", "Camera → Video → resolution/FPS: 24 fps on FHD, UHD and 8K (rear and front). Pro video: 4K/21:9 25/48/50/100/120, FHD 25/48/50/100, 8K 25 and the 10× at 25/48/50 on the patched Camera. Slow motion: 4K120 and FHD120, with the FHD240 menu entry rebuilt."],
+  profps: ["Frame-rate unlocks", "Camera → Video → resolution/FPS: 24 fps on FHD, UHD and 8K (rear and front). Pro video: 4K/21:9 25/48/50/100/120, FHD 25/48/50/100, 8K 25; the 10× tele appears at 25/48/50 on S918BXXUAGZIF with the patched Camera, elsewhere it stays hidden. Slow motion: 4K120 and FHD120, with the FHD240 menu entry rebuilt."],
   wideflash: ["Flash on ultrawide", "Camera → Photo: flash on; Video: torch on. Camera Assistant now shows the ultrawide flash option."],
   cameratweaks: ["Camera Tweaks", "24 fps: Camera → Video → resolution/FPS. Ultrawide flash: Photo flash / Video torch. Tint: Pro or Pro video → white balance. Zoom rocker: Video zoom. 4K120: Slow motion → 4K120 (Log needs the Log video tweak). Camera Assistant: video softening, AF speed/sensitivity, auto exposure limit and anamorphic desqueeze. Touch focus: Slow motion. USB-C: Camera → Settings → Storage. Pro rates: Camera → More → Pro video."],
   videosoftening: ["Video softening", "Camera → Settings → Camera Assistant → Video softening (Off / Medium / High)."],
@@ -447,7 +450,6 @@ const WHERE = {
   slowmoaf: ["Focus in Slow motion", "Camera → Slow motion → tap the viewfinder to focus while recording."],
   extstorage: ["USB-C recording", "Plug an exFAT USB-C SSD or drive, then Camera → Settings → Storage → USB storage; recording works in every video mode."],
   anamorphic: ["Anamorphic desqueeze", "Camera → Settings → Camera Assistant → Anamorphic lens desqueeze."],
-  profps: ["Pro video frame rates", "Camera → More → Pro video → resolution/FPS: 4K 25/48/50/100/120 (120 on the Wide and Ultrawide), FHD 25/48/50/100, 8K 25, and 21:9 Cinema 25/48/50/100/120. The 10× tele appears at 25/48/50 on S918BXXUAGZIF with the patched Camera APK; on other firmwares it stays hidden."],
   autoframe: ["4K auto framing", "Reported to make the camera fail (S918B). Video at UHD with Auto framing on; turn it off if the camera fails to open."],
   settingssearch: ["Settings search", "Open Settings and tap the search bar."],
   callscreen: ["Call screening", "Phone → Settings → Call screening. On the S23 the AI summary shows an error; screening and voice messages work."],
@@ -666,9 +668,9 @@ function initialSelection(p) {
   return s;
 }
 
-// india and callrec replace each other. With an Indian SIM (MCC 404/405) picks take the India config,
+// india and callrec replace each other. With an Indian SIM (MCC 404/405/406) picks take the India config,
 // otherwise plain call recording.
-function simIndia() { return /^40[45]/.test(String((S.probe && S.probe.phone && S.probe.phone.sim) || "")); }
+function simIndia() { return /^40[456]/.test(String((S.probe && S.probe.phone && S.probe.phone.sim) || "")); }
 function carrierSkip() { return simIndia() ? "callrec" : "india"; }
 // picked only on their own, never by a category tick or the default selection
 const NO_AUTO_PICK = ["autoframe", "hdr2023"];
@@ -765,6 +767,12 @@ function setPick(id, on) {
   return true;
 }
 function onPick(id, on, quiet) {
+  // Wi-Fi 7 needs the AirDrop driver. On a kernel with its own Wi-Fi stack AirDrop is unavailable
+  // while Wi-Fi 7 still is; keep it off instead of failing the whole Apply later.
+  if (id === "wifi7" && on && !available("airdrop")) {
+    if (!quiet) toast("Wi-Fi 7 needs AirDrop, which isn't available for this kernel");
+    on = false;
+  }
   on ? S.sel.add(id) : S.sel.delete(id);
   { const cb = $("tw-" + id); if (cb) cb.checked = on; }
   if (id === "callscreen" && on && !quiet) toast("Call screening installs Language Core; a reboot doesn't remove it");
@@ -1004,12 +1012,12 @@ async function onAutostart(e) {
   toast(out || (on ? "autostart on" : "autostart off"));
 }
 
-async function refresh(btn) {
+async function refresh(btn, resume = true) {
   if (btn) { btn.disabled = true; btn.textContent = "Refreshing…"; }
   try {
     const p = await probe();
     S.probe = p; renderHeader(p);
-    if (p.applying) { showProgress({ resumed: true }); return; }
+    if (resume && p.applying) { showProgress({ resumed: true }); return; }
     renderTweaks(); renderAutostart(); renderStatus();
   } catch (e) { showError(e.title, e.r); }
   finally { if (btn) { btn.disabled = false; btn.textContent = "Refresh status"; } }
@@ -1062,6 +1070,30 @@ async function onReport(e) {
   toast((await copyText(r2.stdout)) ? "Report copied" : "Couldn't copy; share the file from Download instead");
 }
 
+// AirDrop test: records the logs while the user tries one share, then says which stage it reached.
+// The report alone can't: the phone's log buffers cover only minutes, and it keeps warnings only.
+const AIRDROP_TEST_SECS = 90;
+async function onAirdropTest(e) {
+  const steps = h("ol", {},
+    h("li", { text: "Turn Mobile Hotspot off here, and Personal Hotspot off on the iPhone or Mac." }),
+    h("li", { text: "On the Apple device: unlock it, and set AirDrop to Everyone for 10 minutes." }),
+    h("li", { text: "Tap Start, then share a photo: Gallery > Share > Quick Share > Share with Apple devices, and wait about 20 seconds for the Apple device to show up (tap it if it does)." }));
+  const body = h("div", {}, h("p", { text: "This records " + AIRDROP_TEST_SECS + " seconds of AirDrop logs while you try one share, then says how far it got." }), steps,
+    h("p", { class: "small", text: "The log is saved in Download with email addresses, MAC addresses, long numbers and quoted names (device and contact names) masked." }));
+  if (!(await confirmDialog({ title: "Record an AirDrop test", body, ok: "Start" }))) return;
+  const b = e.target, label = b.textContent; b.disabled = true; b.textContent = "Recording…";
+  const done = busyDialog("Recording: share with the Apple device now", "Gallery > Share > Quick Share > Share with Apple devices. Recording stops after " + AIRDROP_TEST_SECS + " s.");
+  const r = await exec(TW + " airdrop-test " + AIRDROP_TEST_SECS, (AIRDROP_TEST_SECS + 60) * 1000);
+  done(); b.disabled = false; b.textContent = label;
+  if (r.errno !== 0) { showError("Couldn't record the AirDrop test", r); return; }
+  const lines = (r.stdout || "").trim().split("\n").filter(l => !/^recording for /.test(l));
+  const path = lines.pop() || "";
+  const res = h("div", {}, h("pre", { text: lines.join("\n") }),
+    h("p", { class: "small", text: "Saved as " + path.replace("/sdcard/", "") + ". Attach it with a bug report (the report includes this result too)." }));
+  if (!(await confirmDialog({ title: "AirDrop test done", body: res, ok: "Copy result" }))) return;
+  toast((await copyText(lines.join("\n"))) ? "Result copied" : "Couldn't copy; share the file from Download instead");
+}
+
 async function onBootLog(e) {
   if (!e.target.open) return;
   const pre = $("bootlog-pre"); pre.textContent = "Loading…";
@@ -1092,10 +1124,11 @@ function wire() {
   $("wifi7page").addEventListener("click", onWifi7Page);
   $("unflag").addEventListener("click", onUnflag);
   $("report").addEventListener("click", onReport);
+  $("airdroptest").addEventListener("click", onAirdropTest);
   $("bootlog").addEventListener("toggle", onBootLog);
   $("p-back").addEventListener("click", async () => {
     showMain(); $("banner").textContent = "";
-    await refresh(null);
+    await refresh(null, false);   // don't bounce back into the progress view while the apply lock clears
     S.sel = initialSelection(S.probe); renderTweaks();
   });
 }
@@ -1192,10 +1225,10 @@ function installMock() {
   function probeJson() {
     const w7 = q.has("w7");
     const tw = (id, why) => ({ id, available: !why, why: why || "", active: !!st.active[id] });
-    return JSON.stringify({ version: "v1.1.0", module: true,
+    return JSON.stringify({ version: "v1.8.5", module: true,
       phone: { model: "SM-S918W", firmware: "S918WVLU8GZIF", csc: "XAC", android: "17", kernel: "5.15.197-android13-8-34343818-abS918WVLU8GZIF", gms: 264531035, sim: new URLSearchParams(location.search).get("sim") || "40445" },
       picked: st.picked, autostart: st.autostart, applying: !!st.run,
-      tweaks: [tw("airdrop"), tw("battery"), tw("features"), tw("callrec"), tw("india"), tw("hotspot6g"), tw("wifi7", w7 ? "" : "needs firmware S918WVLU8GZIF (this phone runs S918WVLU7GZE1)"), tw("display"), tw("logvideo"), tw("vulkan"), tw("camerahdr"), tw("hdr2023"), tw("audioeraser"), tw("colortone"), tw("galaxyai"), tw("camextras"), tw("autoframe"), tw("settingssearch"), tw("bargein"), tw("tenbit"), tw("weather"), tw("wideflash"), tw("prowbtint"), tw("zoomrocker"), tw("videosoftening"), tw("afcontrol"), tw("aelimit"), tw("slowmoaf"), tw("extstorage"), tw("anamorphic"), tw("profps"), tw("callscreen", "needs the Language Core 4.0.01.24 APK (3.1 GB) in /data/adb/s23tweaks/dl/languagecore-4.0.01.24.apk; see the README"), tw("dual5g"), tw("nronly"), tw("natroam"), tw("rambler")] });
+      tweaks: [tw("airdrop"), tw("battery"), tw("features"), tw("callrec"), tw("india"), tw("hotspot6g"), tw("wifi7", w7 ? "" : "needs firmware S918WVLU8GZIF (this phone runs S918WVLU7GZE1)"), tw("display"), tw("logvideo"), tw("vulkan"), tw("camerahdr"), tw("hdr2023"), tw("audioeraser"), tw("colortone"), tw("galaxyai"), tw("highlights"), tw("camextras"), tw("autoframe"), tw("settingssearch"), tw("bargein"), tw("tenbit"), tw("hideksu"), tw("weather"), tw("wideflash"), tw("prowbtint"), tw("zoomrocker"), tw("videosoftening"), tw("afcontrol"), tw("aelimit"), tw("slowmoaf"), tw("extstorage"), tw("anamorphic"), tw("profps"), tw("callscreen", "needs the Language Core 4.0.01.24 APK (3.1 GB) in /data/adb/s23tweaks/dl/languagecore-4.0.01.24.apk; see the README"), tw("dual5g"), tw("nronly"), tw("natroam"), tw("rambler")] });
   }
   function handle(cmd) {
     tick();
@@ -1218,6 +1251,7 @@ function installMock() {
       const lt = logText(), up = ((now() - st.bootAt) / 1000).toFixed(2);
       return [0, up + " 3000.00\n" + Math.floor(now() / 1000) + "\n" + (lt.mtime || 0) + "\n---\n" + lt.text, "", 150];
     }
+    if (/ airdrop-test \d+$/.test(cmd)) return [0, "recording for 90 s: share a photo with Quick Share > Share with Apple devices now\n2026-11-23 12:00, 90 s: Mosey ran; the kernel log has no AirDrop link lines: the log shows how far Mosey got\n  Quick Share screens opened 2, Quick Share lines 40, Mosey app lines 85, mosey_server lines 12 (its idle restarts not counted), Mosey app starts 1, AirDrop link kernel lines 0\n  log: /sdcard/Download/s23-ultra-tweaks-airdrop-20261123-120000.txt\n/sdcard/Download/s23-ultra-tweaks-airdrop-20261123-120000.txt\n", "", 3000];
     if (/ report$/.test(cmd)) return [0, "/sdcard/Download/s23-ultra-tweaks-report-20261123-120000.txt\n", "", 1500];
     if (cmd.includes("s23-ultra-tweaks-report-")) return [0, "s23-ultra-tweaks report, 2026-11-23 12:00:00 +0530\nmodule " + (st.version || "mock") + "\n\n===== phone =====\nmodel SM-S918W, firmware S918WVLU8GZIF (mock)\n", "", 200];
     if (cmd.includes("boot.log")) return [0, st.autostart ? "2026-11-22 08:01:12 applying: " + st.picked + "\n2026-11-22 08:02:05 done\n" : "", "", 200];

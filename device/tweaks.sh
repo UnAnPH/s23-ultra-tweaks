@@ -11,6 +11,8 @@
 #   probe             one line of JSON: phone, which tweaks it can take and why not, what's active
 #   status            print what is active
 #   report            write a bug report (phone, tweaks, logs, crash summaries; no personal data) to Download
+#   airdrop-test [S]  record S seconds (default 90) of AirDrop logs while the user tries a share, say which
+#                     stage it reached, and save the log (personal data masked) to Download
 #   unflag            remove the Play services flag overrides that the airdrop tweak adds
 #   autostart on|off  re-apply the saved tweaks at every boot. DFRoot roots the phone by itself at
 #                     boot, then KernelSU runs the module's service.sh (module) or a script in
@@ -19,7 +21,7 @@
 #   wifi7page         open Samsung's hidden "Wi-Fi 7 mode" settings page (Wi-Fi Labs)
 #   loop | guard      (internal) keep mosey_server running / reboot cleanly on a Wi-Fi firmware crash
 # Tweaks: airdrop battery features callrec india hotspot6g wifi7 display logvideo vulkan
-#         camerahdr hdr2023 audioeraser colortone galaxyai camextras autoframe settingssearch bargein
+#         camerahdr hdr2023 audioeraser colortone galaxyai highlights camextras autoframe settingssearch bargein
 #         callscreen tenbit hideksu weather wideflash
 #         prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage
 #         anamorphic profps dual5g nronly natroam rambler  (see README.md; the categories they're grouped in are in install.sh and the WebUI)
@@ -48,14 +50,14 @@ V=${S23T_STATE:-/data/adb/s23tweaks}         # state: choices, logs, backups, au
 mkdir -p $V; L=$V/tweaks.log; R=$V/run
 [ -f $D/module.prop ] && MODULE=1 || MODULE=0
 APPLY_LOCK=/dev/s23tweaks_apply.lock         # /dev is tmpfs: locks never survive a reboot
-STAYS_TILL_REBOOT="airdrop wifi7 battery india callrec vulkan audioeraser hdr2023 colortone tenbit galaxyai settingssearch hideksu profps"
-TWEAK_IDS="airdrop battery features callrec india hotspot6g wifi7 display logvideo vulkan camerahdr hdr2023 audioeraser colortone galaxyai camextras autoframe settingssearch bargein callscreen tenbit hideksu weather wideflash prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage anamorphic profps dual5g nronly natroam rambler"
+STAYS_TILL_REBOOT="airdrop wifi7 battery india callrec vulkan audioeraser hdr2023 colortone highlights tenbit galaxyai settingssearch hideksu profps"
+TWEAK_IDS="airdrop battery features callrec india hotspot6g wifi7 display logvideo vulkan camerahdr hdr2023 audioeraser colortone galaxyai highlights camextras autoframe settingssearch bargein callscreen tenbit hideksu weather wideflash prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage anamorphic profps dual5g nronly natroam rambler"
 GMS_MIN=261125000                            # Play services 26.11, the first with Mosey support
 # Firmware the AirDrop/Wi-Fi 7 kernel modules are checked against (one line each, read by customize.sh).
 # All are One UI 9 build GZIF on GKI kernel 34343818, and their whole Wi-Fi stack (cnss2, mhi, cfg80211,
 # mac80211, ipa) has the same code and symbol CRCs as S918WVLU8GZIF, which the modules are built on.
 AIRDROP_KBASE=5.15.197-android13-8-34343818-ab
-AIRDROP_FW="S918WVLU8GZIF S918BXXUAGZIF S918U1UEU8GZIF S918USQU8GZIF S918NKSU8GZIF"
+AIRDROP_FW="S918WVLU8GZIF S918BXXUAGZIF S918U1UEU8GZIF S918USQU8GZIF S918NKSU8GZIF S9180ZHU8GZIF"
 kernel_stock() { for f in $AIRDROP_FW; do [ "$(uname -r)" = "$AIRDROP_KBASE$f" ] && return 0; done; return 1; }
 # Opt-in for custom kernels (issue #10): with the file $V/allow-any-kernel, a 5.15 android13 kernel on one
 # of the supported firmwares is let through. The kernel itself still refuses the modules if any symbol CRC
@@ -119,6 +121,17 @@ SETTINGS_EAD="S918WVLU8GZIF 5b8afa24f17e090d57380b8ebbd3dcee f499f2e574a47eca041
 S918BXXUAGZIF 5b20b1a68f94d01bba5a776e15ffdc30 de6d142d238849198810dfe70fada8dd"
 ead_row() { echo "$SETTINGS_EAD" | awk -v b="$(getprop ro.build.PDA)" '$1 == b'; }
 ead_builds() { echo "$SETTINGS_EAD" | awk '{print $1}' | tr '\n' ' ' | sed 's/ $//; s/ / or /g'; }
+# Patch files hold "<byte offset> <octal value>" lines and are LF in the repo; a CRLF checkout
+# would hand read() a trailing CR, so the loops strip it.
+# highlights: the Notification highlights page (Settings > Notifications > Advanced settings) is hidden
+# while com.android.settings:bool/config_na_enable is false, which no S23 build allows. The patches flip
+# SecNotificationIntelligenceController.getAvailabilityStatus()'s early "const/4 p0, 3" to 0. The ead one
+# goes on top of the colortone patch, as both touch different bytes of the same APK's stored dex.
+# firmware, stock md5, md5 with files/SecSettings-nh-<firmware>.patch, md5 with the colortone patch,
+# md5 with both (tools/nhpatch.py makes them)
+SETTINGS_NH="S918BXXUAGZIF 5b20b1a68f94d01bba5a776e15ffdc30 9d87d879ce01bd65c98cd7dfcf1063ab de6d142d238849198810dfe70fada8dd 854ca78b2a6c9cd2020d1326a0c5a13a"
+nh_row() { echo "$SETTINGS_NH" | awk -v b="$(getprop ro.build.PDA)" '$1 == b'; }
+nh_builds() { echo "$SETTINGS_NH" | awk '{print $1}' | tr '\n' ' ' | sed 's/ $//; s/ / or /g'; }
 CAM_APK=/system/priv-app/SamsungCamera/SamsungCamera.apk
 # profps, keyed on the Camera APK itself, not the firmware: md5 of a stock SamsungCamera.apk, md5 once
 # patched, the patch in files/, and the firmware it came from. Any firmware whose stock Camera APK is listed
@@ -153,6 +166,11 @@ IN_SALES_PROPS="ro.csc.sales_code ro.boot.sales_code persist.audio.sales_code ri
 NEARBY_FLAGS="45704091 45723015 sharing_package_whitelist_check_bypass"   # Nearby Sharing: enableExternalProviders + provider-registry gate + GMS 26.46+ source-stamp bypass
 
 HIST=/dev/s23tweaks.history   # every apply's lines since boot (tweaks.log holds only the last apply)
+# Set by cleanup when the module is removed after an apply in this boot. The binds that apply made stay
+# until a reboot, but cleanup deleted the files behind them, so a reinstall would take its own binds for
+# someone else's and leave them on (a camera driver restart then found no driver). Applying waits for the reboot.
+REMOVED=/dev/s23tweaks_removed
+REMOVED_MSG="the module was removed earlier in this boot and that install's changes are still mounted; reboot, then apply"
 log() { m="$(cut -d' ' -f1 /proc/uptime) $*"; echo "$m" >> $L; echo "$m" >> $HIST 2>/dev/null; echo "s23tweaks: $*" > /dev/kmsg; sync; }
 fail() { log "FAILED: $*"; exit 1; }
 wait_for() { n=$1; shift; while [ $n -gt 0 ]; do "$@" && return 0; n=$((n-1)); sleep 1; done; return 1; }
@@ -171,6 +189,21 @@ migrate_choices() {
   echo "$mc_o"
 }
 md5() { md5sum "$1" 2>/dev/null | cut -d' ' -f1; }
+# the kernel log. dmesg needs the syslog() system call, which an app's seccomp filter forbids (a root shell
+# started from an app, such as a module page, can keep that filter: dmesg dies with SIGSYS and prints
+# nothing); /dev/kmsg is read with plain read() calls
+klog() { ( dmesg ) 2>/dev/null || timeout 1 cat /dev/kmsg 2>/dev/null | sed 's/^[^;]*;//'; }
+# masks email, MAC addresses, IMEI-length numbers and quoted names (device and contact names in share logs)
+scrub() {
+  sed -E -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/<email>/g' \
+    -e 's/([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}/<mac>/g' -e 's/(^|[^0-9])[0-9]{14,17}([^0-9]|$)/\1<number>\2/g' \
+    -e 's/((device|account|profile|owner|user)[Nn]ame=|[(, ]name=)[^,)]+/\1<name>/g' -e 's/(account=)[^,)]+/\1<account>/g' |
+    if [ -n "$sn" ]; then sed "s/$sn/<serial>/g"; else cat; fi
+}
+AD_SUM=$V/airdrop-test.summary   # the last airdrop-test's verdict, shown in the report
+# what logcat holds: a busy phone fills the main buffer in minutes, so a missing line may just be old
+log_span() { f=$(logcat -d -b main -v epoch 2>/dev/null | awk 'NF > 2 && $1 ~ /^[0-9]+\./ { print int($1); exit }')
+  [ -n "$f" ] && echo "$((($(date +%s) - f) / 60)) min" || echo "unknown"; }
 # The apply lock is a directory holding the owner's pid. A lock whose owner is gone (killed apply)
 # counts as free, so a crash can't block every later apply until the next reboot.
 lock_alive() { lp=$(cat $APPLY_LOCK/pid 2>/dev/null); [ -n "$lp" ] && kill -0 "$lp" 2>/dev/null; }
@@ -241,11 +274,11 @@ back_to_stock() {   # the firmware binds sit on the overlay, so they come off fi
 wonder_load() {
   for i in 1 2 3; do
     insmod $AIR/wonder.ko 2>/dev/null && return 0
-    dmesg | tail -n 60 | grep -q 'mac80211 hardware. Ret: -12' || break
+    klog | tail -n 60 | grep -q 'mac80211 hardware. Ret: -12' || break
     log "airdrop: not enough contiguous memory for wonder (try $i of 3); compacting memory and retrying"
     sync; echo 1 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory; sleep 2
   done
-  fail "wonder: $(dmesg | grep -E 'wonder|page allocation failure' | tail -n 3 | tr '\n' ' ')"
+  fail "wonder: $(klog | grep -E 'wonder|page allocation failure' | tail -n 3 | tr '\n' ' ')"
 }
 
 airdrop_kernel() {
@@ -264,7 +297,7 @@ airdrop_kernel() {
   pe=$(ksym plat_env cnss2) || { back_to_stock; fail "plat_env not found in kallsyms"; }
   b=$(ksect cnss2 .bss) || { back_to_stock; fail "cnss2 .bss address not readable"; }; d=$(( 0x$pe - b ))
   [ $d -ge 0 ] && [ $d -lt 1048576 ] || { back_to_stock; fail "plat_env 0x$pe is not in cnss2 .bss"; }
-  insmod $A/mhifix.ko mode=1 plat_env=0x$pe; r=$(dmesg | grep mhifix | tail -4 | tr '\n' ' ')
+  insmod $A/mhifix.ko mode=1 plat_env=0x$pe; r=$(klog | grep mhifix | tail -4 | tr '\n' ' ')
   case "$r" in *"tables freed"*"fw_mem DDR freed"*) ;; *) back_to_stock; fail "mhifix: $r" ;; esac
   # S24 firmware over /vendor/firmware/kiwi: an overlay of placeholders, each bound to the downloaded file
   # (the S23 board file stays)
@@ -274,22 +307,22 @@ airdrop_kernel() {
   mount -t overlay s23tweaks_fwov -o ro,lowerdir=$T:/vendor/firmware/kiwi /vendor/firmware/kiwi || { back_to_stock; fail "firmware overlay"; }
   for f in $FW; do chmod 644 $A/fw/$f; chcon u:object_r:vendor_firmware_file:s0 $A/fw/$f
     mount -o bind,ro $A/fw/$f /vendor/firmware/kiwi/$f || { back_to_stock; fail "firmware bind $f"; }; done
-  insmod $A/kiwi_v2.ko || { back_to_stock; fail "S24 Wi-Fi driver: $(dmesg | tail -2 | tr '\n' ' ')"; }
+  insmod $A/kiwi_v2.ko || { back_to_stock; fail "S24 Wi-Fi driver: $(klog | tail -2 | tr '\n' ' ')"; }
   wifi_up; sleep 5
   # Some custom kernels bring the S24 driver up fine alone but not with wifi7's MLO config and S24
   # supplicant (issue #21): drop wifi7 for this boot and retry, so AirDrop still works
   if ! wlan_up && { bound $INI || bound $WPAS; }; then
     log "airdrop: Wi-Fi didn't come up with the wifi7 settings; retrying without them (wifi7 off until a reboot)"
     wifi_down; wifi7_drop
-    insmod $A/kiwi_v2.ko || { back_to_stock; fail "S24 Wi-Fi driver: $(dmesg | tail -2 | tr '\n' ' ')"; }
+    insmod $A/kiwi_v2.ko || { back_to_stock; fail "S24 Wi-Fi driver: $(klog | tail -2 | tr '\n' ' ')"; }
     wifi_up; sleep 5
   fi
   # bwfix: the S24 firmware asks for a PCIe Gen3 link when AirDrop starts; the S23 refuses (Gen2
   # max) and the firmware crashes on the refusal. bwfix sets Gen2 and acknowledges.
   cb=$(ksym cnss_mhi_bw_scale.cfi_jt cnss2)
-  [ -d /sys/module/bwfix ] || insmod $A/bwfix.ko ${cb:+orig=0x$cb} || fail "bwfix: $(dmesg | tail -2 | tr '\n' ' ')"
+  [ -d /sys/module/bwfix ] || insmod $A/bwfix.ko ${cb:+orig=0x$cb} || fail "bwfix: $(klog | tail -2 | tr '\n' ' ')"
   wonder_load
-  log "airdrop: kernel side loaded ($(dmesg | grep -o 'wonder: connected to wlan.*' | tail -1))"
+  log "airdrop: kernel side loaded ($(klog | grep -o 'wonder: connected to wlan.*' | tail -1))"
 }
 
 # ---------- wifi7: Wi-Fi 7 multi-link (MLO) as a Wi-Fi client ----------
@@ -330,21 +363,27 @@ wifi7_drop() {   # undo wifi7's binds, with the supplicant stopped and the drive
 wifi7_reload() {   # the AirDrop driver was already loaded before the config was bound
   log "wifi7: reloading the Wi-Fi driver so it reads the MLO settings (Wi-Fi drops for ~15 s)"
   wifi_down
-  insmod $AIR/kiwi_v2.ko || { back_to_stock; fail "wifi7: kiwi_v2 reload: $(dmesg | tail -2 | tr '\n' ' ')"; }
+  insmod $AIR/kiwi_v2.ko || { back_to_stock; fail "wifi7: kiwi_v2 reload: $(klog | tail -2 | tr '\n' ' ')"; }
   wifi_up
   wonder_load
 }
 wifi7_check() {
-  # If Wi-Fi can't run with the S24 supplicant, go back to the S23's and carry on without MLO
-  wait_for 60 wlan_up; wait_for 90 connected
+  # If Wi-Fi can't run with the S24 supplicant, go back to the S23's and carry on without MLO.
+  # Wi-Fi switched off before the apply: turn it on only for the check (no need to wait for a
+  # network then), and off again afterwards.
+  was_off=${WIFI_WAS_OFF:-0}
+  wifi_off && cmd wifi set-wifi-enabled enabled
+  wait_for 60 wlan_up; [ $was_off = 1 ] || wait_for 90 connected
   if [ "$(getprop init.svc.wpa_supplicant)" = running ] && cmd wifi status | grep -q "Wifi is enabled" &&
      [ "$(md5 /proc/$(pidof wpa_supplicant)/exe)" = "$(md5 $AIR/wifi7/wpa_supplicant)" ]; then
     log "wifi7: Wi-Fi running with the S24 supplicant ($(cmd wifi status | grep -oE 'Wi-Fi standard: [^,]*' | head -1))"
   else
     log "wifi7: warning: Wi-Fi didn't come up with the S24 supplicant; switching back to the S23 one (no MLO)"
     cmd wifi set-wifi-enabled disabled; wait_for 15 wifi_off; wait_for 20 sup_stopped; wifi7_unbind_sup
-    cmd wifi set-wifi-enabled enabled; wait_for 60 wlan_up
+    [ $was_off = 1 ] || { cmd wifi set-wifi-enabled enabled; wait_for 60 wlan_up; }
   fi
+  [ $was_off = 1 ] && { cmd wifi set-wifi-enabled disabled; log "wifi7: Wi-Fi was off before the apply, so it's off again"; }
+  return 0
 }
 connected() { cmd wifi status | grep -q "Supplicant state: COMPLETED"; }
 
@@ -1182,14 +1221,23 @@ colortone_stage() {
 colortone_bind() {
   sm=$(md5sum $SETTINGS | cut -d' ' -f1)
   set -- $(ead_row); eb=$1; SETTINGS_STOCK_MD5=${2:-none}; SETTINGS_EAD_MD5=${3:-none}
-  if [ "$sm" = $SETTINGS_EAD_MD5 ]; then :   # already patched (an earlier apply this boot)
-  elif [ "$sm" != $SETTINGS_STOCK_MD5 ]; then
-    log "colortone: Settings isn't the $(ead_builds) build, so the Adaptive color tone switch stays hidden"; return
+  set -- $(nh_row); NHM=${3:-none}; NHE=${5:-none}   # highlights patches this same APK, on top of ours
+  if [ "$sm" = $SETTINGS_EAD_MD5 ] || [ "$sm" = $NHE ]; then :   # an earlier apply this boot had the right layer
+    :
   else
+    if [ "$sm" = $NHM ]; then
+      # a highlights-only bind from an earlier apply in this boot: drop it and rebuild from stock, so
+      # highlights_bind can stack its patch on ours below (the two touch different bytes of the dex)
+      umount $SETTINGS 2>/dev/null
+      sm=$(md5sum $SETTINGS | cut -d' ' -f1)
+    fi
+    if [ "$sm" != $SETTINGS_STOCK_MD5 ]; then
+      log "colortone: Settings isn't the $(ead_builds) build, so the Adaptive color tone switch stays hidden"; return
+    fi
     P=$PL/colortone/SecSettings.apk   # the patched copy stays on storage and is reused at the next boot
     if [ "$(md5sum $P 2>/dev/null | cut -d' ' -f1)" != $SETTINGS_EAD_MD5 ]; then
       cp $SETTINGS $P.new
-      grep -v '^#' $D/files/SecSettings-ead-$eb.patch | while read off oct; do
+      grep -v '^#' $D/files/SecSettings-ead-$eb.patch | tr -d '\r' | while read off oct; do
         printf "\\$oct" | dd of=$P.new bs=1 seek=$off conv=notrunc 2>/dev/null; done
       [ "$(md5sum $P.new | cut -d' ' -f1)" = $SETTINGS_EAD_MD5 ] || { rm -f $P.new; fail "colortone: Settings patch gave the wrong file"; }
       mv $P.new $P
@@ -1199,6 +1247,32 @@ colortone_bind() {
     am force-stop com.android.settings
   fi
   log "colortone: Adaptive color tone on (Settings > Display)"
+}
+# Its page is hidden because the bool that getAvailabilityStatus() reads is false, so patch the return
+# value instead of the resource: the arsc differs per build, the dex differs only in that literal.
+highlights_bind() {
+  sm=$(md5sum $SETTINGS | cut -d' ' -f1)
+  set -- $(nh_row); eb=$1; stock=${2:-none}; nhm=${3:-none}; ead=${4:-none}; nhe=${5:-none}
+  [ -z "$eb" ] && { log "highlights: Settings isn't the $(nh_builds) build, so its page stays hidden"; return; }
+  P=$PL/highlights/SecSettings.apk
+  case $sm in
+    $nhm|$nhe) return 0 ;;   # bound by an earlier apply this boot
+    $stock) pf=$D/files/SecSettings-nh-$eb.patch; want=$nhm ;;
+    $ead) pf=$D/files/SecSettings-nh-ead-$eb.patch; want=$nhe ;;   # colortone is bound under us
+    *) log "highlights: Settings isn't the $eb or colortone build, so its page stays hidden"; return ;;
+  esac
+  if [ -n "${pf:-}" ]; then
+    mkdir -p $PL/highlights
+    rm -f $P.new; cp $SETTINGS $P.new
+    grep -v '^#' $pf | tr -d '\r' | while read off oct; do
+      printf "\\$oct" | dd of=$P.new bs=1 seek=$off conv=notrunc 2>/dev/null; done
+    [ "$(md5sum $P.new | cut -d' ' -f1)" = $want ] || { rm -f $P.new; fail "highlights: Settings patch gave the wrong file"; }
+    mv $P.new $P
+  fi
+  chmod 644 $P; chcon u:object_r:system_file:s0 $P
+  mount -o bind,ro $P $SETTINGS || fail "highlights: bind $SETTINGS"
+  am force-stop com.android.settings
+  log "highlights: its page is on (Settings > Notifications > Advanced settings)"
 }
 cam24fps_bind() {
   set -- $(cam24_row)
@@ -1216,7 +1290,7 @@ cam24fps_bind() {
     P=$PL/cam24fps/SamsungCamera.apk   # patched copy stays on storage and is reused at the next boot
     if [ "$(md5sum $P 2>/dev/null | cut -d' ' -f1)" != $CAM_PATCHED_MD5 ]; then
       cp $CAM_APK $P.new
-      grep -v '^#' $D/files/$cpf | while read off oct; do
+      grep -v '^#' $D/files/$cpf | tr -d '\r' | while read off oct; do
         printf "\\$oct" | dd of=$P.new bs=1 seek=$off conv=notrunc 2>/dev/null; done
       if [ "$(md5sum $P.new | cut -d' ' -f1)" != $CAM_PATCHED_MD5 ]; then
         rm -f $P.new
@@ -1404,6 +1478,7 @@ payload_apply() {
   has hdr2023 && hdr2023_check && { ran=0; h23=1; }
   has audioeraser && audioeraser_stage && { ran=0; ae=1; }
   has colortone && colortone_stage && { ran=0; ct=1; }
+  has highlights && { ran=0; nh=1; }
   has galaxyai && galaxyai_stage && { ran=0; gai=1; }
   has settingssearch && settingssearch_stage && { ran=0; ssi=1; }
   layers_mount
@@ -1417,6 +1492,7 @@ payload_apply() {
 # right before the restart, not ahead of the ~30 s of camera driver restarts.
 apk_binds() {
   [ "${ct:-0}" = 1 ] && colortone_bind
+  [ "${nh:-0}" = 1 ] && highlights_bind   # after colortone: it patches on top of that bind
   [ "${gai:-0}" = 1 ] && galaxyai_bind
   [ "${ssi:-0}" = 1 ] && settingssearch_bind
   return 0
@@ -1700,6 +1776,49 @@ natroam_off() {   # delete our override files; 0 if any was removed
   while read o; do rm -f "$o"; done < $NROAM; rm -f $NROAM
 }
 
+# ---------- Notification highlights (Galaxy AI priority + summaries) ----------
+# One UI 8.5's Notification highlights sorts the notifications Android thinks important to the top of
+# the panel and summarizes long or repeated chat notifications. The S23 firmware already carries all of
+# it: NotificationManagerService's summarize path (NotiSummaryManager/NotiSummarizer), the Settings
+# pages and com.samsung.android.intellivoiceservice's SummarizationService. What's off is the gate:
+# NotificationManagerService's NmRune flags read SEC_FLOATING_FEATURE_GENAI_CONFIG_LLM_VERSION (the
+# second number must be >= 70), COMMON_CONFIG_AI_VERSION (>= 20261) and
+# FRAMEWORK_SUPPORT_PERSONALIZED_DATA_CORE, and the S23 firmware has no LLM version at all. The two
+# switches are Secure settings that the Settings page (Notification highlights) would write; that page
+# is hidden on the S23 because SecSettings' bool/config_na_enable is false, so they're set here.
+# Summaries run on the phone (intellivoiceservice, no network) when the screen is off and the phone is
+# idle, and need a Samsung account signed in. The model weights aren't on this phone though: Samsung
+# ships them as com.samsung.android.offline.language.model, whose version list covers sm8650 and
+# newer, not the S23's sm8550, so SIS answers pfd is null and no summary appears yet.
+NH_UNDO=$V/undo/noti_intelligence   # the three settings as they were before the first apply
+NH_KEYS="noti_intelligence_summarize_content noti_intelligence_priority_content noti_intelligence_priority_conversation"
+nh_on() { [ "$(settings get secure noti_intelligence_summarize_content)" = 1 ]; }
+nh_apply() {
+  if [ ! -f $NH_UNDO ]; then mkdir -p $V/undo; for k in $NH_KEYS; do echo "$k $(settings get secure $k)" >> $NH_UNDO; done; fi
+  ff_set GENAI_CONFIG_LLM_VERSION 0.81
+  ff_set COMMON_CONFIG_AI_VERSION 20263
+  ff_set FRAMEWORK_SUPPORT_PERSONALIZED_DATA_CORE TRUE
+  for k in $NH_KEYS; do settings put secure $k 1; done
+  nh_on || { log "highlights: couldn't write the notification intelligence settings"; return 1; }
+  [ -n "$(nh_row)" ] || log "highlights: no Settings patch for $(getprop ro.build.PDA), so its page stays hidden (the switches above still work)"
+  log "highlights: notification priority and summaries on"
+}
+nh_off() {   # 0 if anything we set was still there
+  c=1
+  if [ -f $NH_UNDO ]; then   # put back what was there before (wideflash's pattern)
+    while read k v; do
+      if [ "$v" = null ]; then settings delete secure $k >/dev/null 2>&1 && c=0
+      else settings put secure $k "$v" >/dev/null 2>&1 && c=0; fi
+    done < $NH_UNDO
+    rm -f $NH_UNDO; return $c
+  fi
+  for k in $NH_KEYS; do
+    [ "$(settings get secure $k)" = 1 ] || continue
+    settings delete secure $k && c=0
+  done
+  return $c
+}
+
 # rambler: Gboard's Rambler voice typing (Gemini dictation that drops filler words and takes spoken edits),
 # which Google turns on only for Pixel 10 and 11. Gboard 18.x has all of it; the server sends
 # enable_agentic_dictation=false and switches off Rambler's toolbar and motion flags elsewhere. Gboard
@@ -1733,13 +1852,17 @@ rambler_apply() {
   if [ ! -e $RB_UNDO ] && [ ! -e $RB_UNDO.absent ]; then
     if [ -f $GB_OVR ]; then cp $GB_OVR $RB_UNDO; else : > $RB_UNDO.absent; fi
   fi
-  { if [ -f $GB_OVR ]; then grep -vE "name=\"($(rb_names))\"|</map>" $GB_OVR
+  # Android writes a preferences file with no entries as <map /> (self-closing); that, an empty file or no
+  # file at all starts a new map. Anything else without <map> isn't a file we understand.
+  if grep -q '<map>' $GB_OVR 2>/dev/null; then rb_base=keep
+  elif [ ! -s $GB_OVR ] || grep -qE '<map ?/>' $GB_OVR; then rb_base=new
+  else log "rambler: Gboard's flag_override.xml isn't a preferences file this understands; left alone"; return 1; fi
+  { if [ $rb_base = keep ]; then grep -vE "name=\"($(rb_names))\"|</map>" $GB_OVR
     else echo '<?xml version="1.0" encoding="utf-8" standalone="yes" ?>'; echo '<map>'; fi
     for k in $RB_TRUE; do echo "    <boolean name=\"$k\" value=\"true\" />"; done
     for k in $RB_FALSE; do echo "    <boolean name=\"$k\" value=\"false\" />"; done
     for kv in $RB_LONG; do echo "    <long name=\"${kv%%=*}\" value=\"${kv#*=}\" />"; done
     echo '</map>'; } > $R/gboard_flags.xml
-  grep -q '<map>' $R/gboard_flags.xml || { log "rambler: Gboard's flag_override.xml has no <map>; left alone"; rm -f $R/gboard_flags.xml; return 1; }
   if cmp -s $R/gboard_flags.xml $GB_OVR; then log "rambler: on (Gboard's flag overrides already in place)"; rm -f $R/gboard_flags.xml; return 0; fi
   rambler_write $R/gboard_flags.xml; rm -f $R/gboard_flags.xml
   rambler_on || { log "rambler: couldn't write Gboard's flag overrides"; return 1; }
@@ -1911,7 +2034,9 @@ statusbar_wifi_refresh() {
   [ -n "$cur" ] && new="$cur,wifi" || new="wifi"
   settings put secure icon_blacklist "$new" 2>/dev/null || return 0
   sleep 1
-  if [ -n "$cur" ]; then settings put secure icon_blacklist "$cur"; else settings delete secure icon_blacklist; fi
+  sb_restore() { if [ -n "$cur" ]; then settings put secure icon_blacklist "$cur" >/dev/null 2>&1
+                 else settings delete secure icon_blacklist >/dev/null 2>&1; fi; }
+  wait_for 10 sb_restore || log "status bar: couldn't restore icon_blacklist; the Wi-Fi icon may stay hidden until you reset it"
   log "status bar: nudged SystemUI to redraw the Wi-Fi icon after the framework restart"
 }
 
@@ -1953,7 +2078,8 @@ d5g_modem_restart() {
   [ -n "$r" ] || { log "dual5g: can't find the modem's remoteproc; reboot the phone to use the new setting"; return 1; }
   log "dual5g: restarting the modem so it reads the new setting (no signal for ~15 s)"
   echo stop > $r/state 2>/dev/null; sleep 2
-  for i in 1 2 3; do echo start > $r/state 2>/dev/null; wait_for 20 [ "$(cat $r/state)" = running ] && break; done
+  d5g_running() { [ "$(cat $r/state)" = running ]; }
+  for i in 1 2 3; do echo start > $r/state 2>/dev/null; wait_for 20 d5g_running && break; done
   [ "$(cat $r/state)" = running ] || { log "dual5g: the modem didn't come back; reboot the phone"; return 1; }
   wait_for 60 sh -c 'getprop gsm.sim.state | grep -q LOADED'; log "dual5g: modem back up"
 }
@@ -2082,6 +2208,9 @@ why_not() {
     profps) grep -q '</resources>' $CF 2>/dev/null || echo "this firmware's $CF can't be edited" ;;
     galaxyai)
       for p in $GAI_APPS; do [ -f /system/$p/${p#*/}.apk ] || { echo "this phone has no /system/$p/${p#*/}.apk to replace"; return; }; done ;;
+    highlights)
+      cmd package query-services -a android.intellivoiceservice.SummarizationService 2>/dev/null | grep -q SummarizationService ||
+        echo "this phone has no on-device summarization service (com.samsung.android.intellivoiceservice)" ;;
     settingssearch) [ -f /system/$SSI/SecSettingsIntelligence.apk ] || echo "this phone has no /system/$SSI to replace" ;;
     rambler) pm path $GB_PKG >/dev/null 2>&1 || echo "Gboard (com.google.android.inputmethod.latin) isn't installed" ;;
     nronly)
@@ -2141,9 +2270,10 @@ is_on() {
     camerahdr) grep -q 'mfhdr.arcsoft.v4' $FF 2>/dev/null && [ -f /system/lib64/liblow_light_hdr.arcsoft.so ] ;;
     audioeraser) [ -f /system/etc/fastScanner.tflite ] ;;
     hdr2023) bound /system/lib64/libae_bracket_hdr.arcsoft.so && bound /system/lib64/libhybrid_high_dynamic_range.arcsoft.so ;;
-    colortone) bound $SETTINGS ;;
+    colortone) sm=$(md5sum $SETTINGS | cut -d' ' -f1); set -- $(ead_row); [ "$sm" = "${3:-none}" ] || [ "$sm" = "$(nh_row | cut -d' ' -f5)" ] ;;
     tenbit) bound $TB_LIB && [ "$(md5 $TB_LIB)" = "$(md5 $V/tenbit.so)" ] ;;
     galaxyai) bound /system/priv-app/SamsungSmartSuggestions/SamsungSmartSuggestions.apk ;;
+    highlights) nh_on && bound $FF && grep -q '<SEC_FLOATING_FEATURE_GENAI_CONFIG_LLM_VERSION>0\.[7-9][0-9]' $FF 2>/dev/null ;;
     hideksu) hideksu_on ;;
     dual5g) [ -f $D5G/applied ] ;;
     nronly) nr_ours ;;
@@ -2180,9 +2310,10 @@ apply)
   if [ "${S23T_LOCKED:-0}" = 1 ] && [ -d $APPLY_LOCK ]; then echo $$ > $APPLY_LOCK/pid   # handed over by start
   else take_lock || { echo "another apply is already running (see $L)" >&2; exit 3; }; fi
   trap 'rm -rf $APPLY_LOCK' EXIT
+  [ -e $REMOVED ] && { : > $L; fail "$REMOVED_MSG"; }
   picks=$(migrate_choices "$2")
-  [ "$picks" = "$2" ] || log "choices: cam24fps and slowmo4k120 are part of profps now; applying profps"
   TWEAKS=" $picks "; : > $L
+  [ "$picks" = "$2" ] || log "choices: cam24fps and slowmo4k120 are part of profps now; applying profps"
   log "applying:$TWEAKS"
   for x in $picks; do case " $TWEAK_IDS " in *" $x "*) ;; *) fail "unknown tweak: $x" ;; esac; done
   echo "$picks" > $V/choices
@@ -2201,6 +2332,7 @@ apply)
   done
   payload_fetch   # before the AirDrop driver swap takes Wi-Fi down
   if has airdrop; then
+    wifi_off && WIFI_WAS_OFF=1   # before the driver swap turns it on; wifi7_check turns it back off
     has wifi7 && wifi7_bind   # before the driver loads, so it reads the MLO settings
     airdrop_kernel
     if has wifi7 && [ "${W7_OFF:-0}" = 0 ]; then [ "${AK_LOADED:-0}" = 1 ] && [ "${W7_INI_NEW:-0}" = 1 ] && wifi7_reload; wifi7_check; fi
@@ -2271,12 +2403,20 @@ $CF_PROFPS"
   has aelimit && ff_set CAMERA_SUPPORT_AUTO_EXPOSURE_LIMIT TRUE
   has slowmoaf && ff_set CAMERA_SUPPORT_AF_DURING_SLOWMOTION_RECORDING TRUE
   if has logvideo; then logviull_apply   # restarts only the camera driver
-  elif bound $LV_LIB; then tb_restart lv_unbind && log "logvideo: not picked; stock VIULL back"; fi
+  elif bound $LV_LIB; then
+    if tb_restart lv_unbind; then log "logvideo: not picked; stock VIULL back"
+    else log "logvideo: not picked; took the VIULL fix off, but the camera driver didn't stay up afterwards"; fi
+  fi
   has tenbit && tenbit_apply   # restarts only the camera driver
   if has camextras; then hlock_apply   # restarts only the camera driver
-  elif bound $HL_LIB || bound $HA_LIB || bound $HL2_LIB || bound $HA2_LIB; then tb_restart hl_unbind && log "camextras: not picked; stock EIS back"; fi
+  elif bound $HL_LIB || bound $HA_LIB || bound $HL2_LIB || bound $HA2_LIB; then
+    if tb_restart hl_unbind; then log "camextras: not picked; stock EIS back"
+    else log "camextras: not picked; took the levelling copies off, but the camera driver didn't stay up afterwards"; fi
+  fi
   # Bixby barge-in (untested): talk over Bixby while it answers, as on the S24
   has bargein && ff_set BIXBY_CONFIG_BARGEIN_PARAM_MODE 2
+  if has highlights; then nh_apply
+  elif [ -f $NH_UNDO ] || nh_on; then nh_off && log "highlights: not picked; the notification intelligence settings are back"; fi
   # Lock screen Weather effect: the editor's Weather button (weather_apply adds the AI Core stub)
   has weather && ff_set $WX_KEY "$(wx_style)"
   # Draw apps with Vulkan instead of OpenGL (Samsung's libhwui ignores ro.hwui.use_vulkan)
@@ -2294,7 +2434,11 @@ $CF_PROFPS"
   if has rambler; then rambler_apply
   elif rambler_off; then log "rambler: not picked; Gboard's flag overrides are back as they were"; fi
   if has hotspot6g; then hotspot6g_pre && restart=1   # after india, which may set the country to IN
-  elif [ "$(getprop $H6_PROP)" = 1 ]; then /data/adb/ksu/bin/resetprop $H6_PROP 0 && log "hotspot6g: not picked; 6 GHz override off"; fi
+  elif [ "$(getprop $H6_PROP)" = 1 ]; then
+    RP=/data/adb/ksu/bin/resetprop
+    if [ -x $RP ]; then $RP $H6_PROP 0 && log "hotspot6g: not picked; 6 GHz override off"
+    else log "hotspot6g: KernelSU resetprop not found; the 6 GHz override stays until a reboot"; fi
+  fi
   apk_binds
   [ $restart = 1 ] && restart_framework
   if has hideksu; then hidemnt_start                                   # after the restart, so it catches the respawned apps
@@ -2312,7 +2456,7 @@ $CF_PROFPS"
   elif [ -f $D5G/applied ]; then log "dual5g: not picked; putting the original modem file back"; dual5g_restore; fi
   has airdrop && airdrop_post
   [ $restart = 1 ] && statusbar_wifi_refresh   # the framework restart can drop the Wi-Fi status-bar icon
-  on=""; off=""; for x in $2; do if is_on $x; then on="$on $x"; else off="$off $x"; fi; done
+  on=""; off=""; for x in $picks; do if is_on $x; then on="$on $x"; else off="$off $x"; fi; done
   log "on:${on:- none}"
   [ -n "$off" ] && log "not on:$off (the reason is in the lines above)"
   touch /dev/s23tweaks_applied   # lets the boot apply know this boot already has them
@@ -2362,6 +2506,7 @@ guard)
   reboot
   ;;
 status)
+  [ -e $REMOVED ] && echo "note: $REMOVED_MSG"
   echo "saved choices: $(migrate_choices "$(cat $V/choices 2>/dev/null)"); $(sh $D/tweaks.sh autostart)"
   echo "airdrop:  modules [$(grep -oE '^(wonder|bwfix) ' /proc/modules | tr -d '\n')]," \
        "Mosey $(bound /system_ext/bin && echo on || echo off), daemon $(running loop && echo running || echo stopped)," \
@@ -2394,13 +2539,14 @@ status)
   echo "colortone: Settings $(bound $SETTINGS && echo patched || echo stock), service $([ -f /system/priv-app/$EAD/$EAD.apk ] && echo on || echo off)"
   echo "galaxyai: $(for p in $GAI_APPS; do n=${p#*/}; printf '%s=%s ' $n "$(same_size /system/$p/$n.apk $PL/galaxyai/$n.apk && echo S24 || echo stock)"; done)C2PA=$(same_size $C2PA $D/files/libC2paDps-shim.so && echo shim || echo stock)"
   echo "vulkan:   renderer $(getprop debug.hwui.renderer | grep . || echo default)"
-  echo "hideksu:  $(hideksu_on && echo "on (KernelSU manager hidden from apps)" || { bound $KSUJAR && echo "bound, waiting for a framework restart" || echo off; }); mounts $(hidemnt_running && { n=$(hidemnt_count); [ "$n" -gt 0 ] 2>/dev/null && echo "hidden from user-installed apps ($n override(s))" || echo "hidden from user-installed apps"; } || echo "visible to apps")"
+  echo "hideksu:  $(hideksu_on && echo "on (KernelSU manager hidden from apps)" || { bound $KSUJAR && echo "bound, waiting for a framework restart" || echo off; }); mounts $(hidemnt_running && { n=$(hidemnt_count); [ "$n" -gt 0 ] 2>/dev/null && echo "hidden from user-installed apps ($n override(s))" || echo "hidden from user-installed apps"; } || { grep -qw hideksu $V/choices 2>/dev/null && echo "visible to apps (the hiding daemon isn't running; apply again to restart it)" || echo "visible to apps"; })"
   echo "wifi7:    wpa_supplicant $(bound $WPAS && echo S24 || echo stock), driver MLO settings $(bound $INI && echo on || echo off)"
   echo "6ghz ap:  $(h6_offered && echo offered || echo "not offered") (CSC country $(getprop ro.csc.countryiso_code), override $(getprop $H6_PROP | grep . || echo unset))"
   echo "csc:      $SC $(bound $CSCF && { grep -q '<SalesCode>INS<' $CSCF && echo "with the INS config" || echo "with call recording"; } || echo stock) ($CSYS)"
   echo "reported: model $(getprop ro.product.model), csc $(getprop ro.csc.sales_code), country $(getprop ro.csc.countryiso_code)$([ -e $V/india_identity ] && [ "$(getprop ro.product.model)" = $IN_MODEL ] && echo " (india identity on)")"
   echo "nronly:   $(nr_ours && echo "on (Network mode offers LTE only and 5G only)" || echo off)"
   echo "natroam:  $([ -s $NROAM ] && echo "on ($(grep -c . $NROAM) SIM override(s))" || echo off)"
+  echo "highlights: $(is_on highlights && echo "on (notification priority and summaries)" || echo off)"
   echo "rambler:  $(rambler_on && echo "on (Gboard flag overrides)" || echo off)"
   echo "dual5g:   $([ -f $D5G/applied ] && echo "on (modem msim_plmns:$(cat $D5G/applied))" || echo off)$([ -f $D5G/stock/global_defines.xml ] && echo "; original backed up in $D5G/stock")"
   ;;
@@ -2411,6 +2557,7 @@ cleanup)
   n=0; until [ "$(getprop sys.boot_completed)" = 1 ] && [ "$(getprop sys.user.0.ce_available)" = true ] &&
     pm path android >/dev/null 2>&1; do n=$((n+1)); [ $n -gt 4320 ] && exit 1; sleep 5; done
   say() { /system/bin/log -t s23tweaks "cleanup: $*" 2>/dev/null; echo "$*"; }   # Android's log: log() here is ours
+  [ -s $HIST ] && : > $REMOVED   # an apply ran in this boot: its binds outlive the files deleted below
   [ -x $AIR/sqlite3 ] && sh "$0" unflag >/dev/null 2>&1 && say "Play services flag overrides removed"
   if [ -f $V/undo/languagecore ] && pm path $LC_PKG >/dev/null 2>&1; then
     pm uninstall $LC_PKG >/dev/null 2>&1 && say "Language Core uninstalled"
@@ -2447,6 +2594,7 @@ cleanup)
     if dual5g_restore; then say "dual5g: original modem file restored"
     else say "dual5g: COULD NOT restore the modem file; the original stays in $D5G_SD"; cp -r $D5G $D5G_SD/state 2>/dev/null; fi
   fi
+  nh_off && say "highlights: notification intelligence settings back to stock"
   rambler_off && say "rambler: Gboard's flag overrides restored"
   natroam_off && say "natroam: carrier config overrides removed (national roaming shows again after the next reboot)"
   rm -f /dev/s23tweaks_efstool
@@ -2455,6 +2603,72 @@ cleanup)
   say "done; the next reboot removes what's still mounted"
   case "$0" in /dev/*) rm -f "$0" ;; esac
   exit 0
+  ;;
+airdrop-test)
+  # Record one AirDrop attempt: logcat from now on (the buffers alone cover only minutes on a busy phone)
+  # and the kernel log, for $2 seconds while the user shares. Then say which stage it reached: Quick Share
+  # used, Mosey started and logging, the Wi-Fi driver's AirDrop link active. The filtered log goes to
+  # Download with personal data masked; the verdict also goes in the next report.
+  [ "$(id -u)" = 0 ] || { echo "needs root" >&2; exit 1; }
+  to_root_cgroup   # the user leaves the module page to share: don't get frozen with the manager app
+  secs=${2:-90}; case $secs in ''|*[!0-9]*) secs=90 ;; esac; [ $secs -gt 600 ] && secs=600
+  mkdir -p $R /sdcard/Download; sn=$(getprop ro.serialno)
+  out=/sdcard/Download/s23-ultra-tweaks-airdrop-$(date +%Y%m%d-%H%M%S).txt; raw=$R/airdrop-test.log; kr=$R/airdrop-test.kmsg
+  snap() {
+    echo "  Mosey app $(pidof com.google.android.mosey >/dev/null && echo running || echo "not running"), mosey_server $(pidof mosey_server >/dev/null && echo running || echo "not running")," \
+      "Mosey service $(service check com.google.android.moseyservice.IMoseyService/default | grep -q ': found' && echo registered || echo "not registered")"
+    echo "  Wi-Fi: $(cmd wifi status 2>/dev/null | grep -m1 -oE 'Wifi is (enabled|disabled)'), $(cmd wifi status 2>/dev/null | grep -m1 -oE 'Supplicant state: [A-Z_]+')," \
+      "hotspot $(cmd wifi status 2>/dev/null | grep -qiE 'SoftApManager|ROLE_SOFTAP' && echo on || echo off)," \
+      "Bluetooth $([ "$(settings get global bluetooth_on)" = 1 ] && echo on || echo off)," \
+      "AirDrop modules [$(grep -oE '^(wonder|bwfix) ' /proc/modules | tr -d '\n')]"
+    echo "  network interfaces: $(ip -o link 2>/dev/null | awk -F': ' '{ sub(/@.*/, "", $2); print $2 }' | grep -vE '^(lo|dummy|ifb|tunl|gre|erspan|ip_vti|ip6|sit|rmnet|epdg)' | tr '\n' ' ')"
+  }
+  # the kernel log's last record number now: lines after it are the test's (its clock stops in deep sleep,
+  # so a time cut-off against /proc/uptime would drop them)
+  k0=$(timeout 1 cat /dev/kmsg 2>/dev/null | tail -n 1 | cut -d, -f2); k0=${k0:-0}
+  before=$(snap); ap0=$(pidof com.google.android.mosey)
+  logcat -b main,system,events,crash -v threadtime -T "$(date '+%m-%d %H:%M:%S').000" > $raw 2>/dev/null & lp=$!
+  echo "recording for $secs s: share a photo with Quick Share > Share with Apple devices now"
+  sleep $secs; kill $lp 2>/dev/null; wait $lp 2>/dev/null
+  after=$(snap)
+  # the test's kernel lines (/dev/kmsg works where dmesg can't; each record is "level,number,microseconds,-;text")
+  timeout 1 cat /dev/kmsg 2>/dev/null | awk -v k0=$k0 '{ split($0, a, ","); if (a[2] + 0 > k0 + 0) { t = a[3] / 1000000; sub(/^[^;]*;/, ""); printf "[%10.3f] %s\n", t, $0 } }' > $kr
+  # the Mosey app's processes (it starts only when Quick Share hands it a share). mosey_server is a lazy
+  # service that the module's loop restarts every few seconds, so its start-up lines are left out of the counts
+  apids=" $ap0 $(pidof com.google.android.mosey) $(awk '/am_proc_start/ && /com\.google\.android\.mosey[],]/ { sub(/.*am_proc_start[^[]*\[[0-9]+,/, ""); sub(/,.*/, ""); print }' $raw | tr '\n' ' ') "
+  rel() { awk -v p="$apids" '{ if (index(p, " " $3 " ") || $0 ~ /[Mm]osey|[Aa]irdrop|AirDrop|[Aa]wdl|AWDL|NearbySharing|ShareLive|QuickShare|Wonder/) print }' $raw | grep -v '	at '; }
+  idle='AidlLazyServiceRegistrar|reset mosey network resources|Interface is gone, nothing to shutdown|Registering service com\.google\.android\.moseyservice'
+  # Quick Share: its screens opening (activity events), and its log lines (it also logs in the background)
+  nui=$(grep -E 'wm_on_(create|resume)_called|wm_(create|restart|resume)_activity|am_focused' $raw | grep -c sharelive)
+  nsl=$(grep -cE 'ShareLive|QuickShare' $raw)
+  napp=$(awk -v p="$apids" 'index(p, " " $3 " ") || $6 ~ /^Mosey/' $raw | grep -c .)
+  nsrv=$(grep -E ' (mosey_server|mosey_daemon)' $raw | grep -cvE "$idle")
+  nmo=$((napp + nst))   # the app is what runs a share; mosey_server alone logs housekeeping too
+  nst=$(grep -cE 'am_proc_start.*com\.google\.android\.mosey[],]' $raw)
+  nk=$(grep -ciE 'wonder|awdl|llw' $kr)
+  nohand="the share never reached the AirDrop side (Share with Apple devices not shown or not tapped, or Play services didn't hand the share to Mosey)"
+  if [ $nmo -gt 0 ]; then
+    if [ $nk -gt 0 ]; then v="Mosey ran and the Wi-Fi driver logged AirDrop link activity: the log shows how far it got"
+    else v="Mosey ran; the kernel log has no AirDrop link lines: the log shows how far Mosey got"; fi
+  elif [ $nui -gt 0 ]; then
+    if [ $nsrv -gt 0 ]; then v="Quick Share opened, but the Mosey app never started (only mosey_server logged, $nsrv lines): $nohand"
+    else v="Quick Share opened, but Mosey logged nothing: $nohand"; fi
+  elif [ $nsl -gt 0 ]; then v="Mosey logged nothing. Quick Share logged $nsl lines but no screen of it opened; if you did share, $nohand"
+  else v="Neither Quick Share nor Mosey logged anything: start the test, then share within $secs s"; fi
+  { echo "$(date '+%Y-%m-%d %H:%M'), $secs s: $v"
+    echo "  Quick Share screens opened $nui, Quick Share lines $nsl, Mosey app lines $napp, mosey_server lines $nsrv (its idle restarts not counted), Mosey app starts $nst, AirDrop link kernel lines $nk"
+    echo "  before:"; echo "$before" | sed 's/^/  /'; echo "  after:"; echo "$after" | sed 's/^/  /'
+    echo "  log: $out"; } | scrub > $AD_SUM
+  { echo "s23-ultra-tweaks AirDrop test, $(date '+%Y-%m-%d %H:%M:%S %z'), module $(mod_ver), $(getprop ro.product.model) $(getprop ro.build.PDA)"
+    echo; cat $AD_SUM
+    echo; echo "===== Mosey, Quick Share and Nearby lines (all levels, names in quotes masked) ====="
+    rel | sed -E "s/\"[^\"]*\"/<name>/g; s/'[^']*'/<name>/g" | tail -n 4000 | cut -c1-400
+    echo; echo "===== kernel log during the test ====="
+    grep -vE 'Runtime (suspend|resume)|PCI link|MHI state' $kr | tail -n 1500 | cut -c1-300
+  } 2>&1 | scrub > $out
+  rm -f $raw $kr
+  cat $AD_SUM
+  echo "$out"
   ;;
 report)
   # One text file for bug reports: phone and firmware, what each tweak found, the stock values and files
@@ -2495,8 +2709,11 @@ report)
     sec "AirDrop and Wi-Fi"
     echo "Wi-Fi: $(cmd wifi status 2>/dev/null | grep -m1 -oE 'Wifi is (enabled|disabled)'), $(cmd wifi status 2>/dev/null | grep -m1 -oE 'Wi-Fi standard: [^,]*'), driver $(cat /sys/module/wlan/version 2>/dev/null || grep -m1 -oE '^kiwi_v2 [0-9]+' /proc/modules)"
     echo "kernel log (Wi-Fi driver, AirDrop modules, PCIe), last 25:"
-    dmesg 2>/dev/null | grep -iE 'wonder|bwfix|mhifix|s23tweaks|kiwi_v2.*(error|fail|assert|crash)|cnss.*(fail|error|crash|assert|ssr|recover)|wlan.*firmware' |
+    klog | grep -iE 'wonder|bwfix|mhifix|s23tweaks|kiwi_v2.*(error|fail|assert|crash)|cnss.*(fail|error|crash|assert|ssr|recover)|wlan.*firmware' |
       grep -vE 'Runtime (suspend|resume)|PCI link|MHI state' | tail -n 25 | sed 's/^/  /' | cut -c1-200
+    echo "Mosey app: $(pidof com.google.android.mosey >/dev/null && echo running || echo "not running (it starts when Quick Share hands it a share)"); the logs below cover the last $(log_span), so an older start or share isn't in them"
+    if [ -f $AD_SUM ]; then echo "last AirDrop test (tweaks.sh airdrop-test):"; sed 's/^/  /' $AD_SUM
+    else echo "no AirDrop test recorded yet: Status > Record an AirDrop test, then try a share while it records"; fi
     echo "Mosey / Quick Share warnings and errors, last 30 (names in quotes masked):"
     logcat -d -v brief 2>/dev/null | grep -E '^[EW]/[^(]*(Mosey|mosey|AirDrop|Awdl|NearbySharing|ShareLive|Wonder)' | grep -v '	at ' |
       sed -E "s/\"[^\"]*\"/<name>/g; s/'[^']*'/<name>/g" | tail -n 30 | sed 's/^/  /' | cut -c1-220
@@ -2530,9 +2747,7 @@ report)
       want && /AndroidRuntime: [A-Za-z0-9_.$]+(Exception|Error)/ { e = $0; sub(/.*AndroidRuntime: /, "", e); k = p " | " substr(e, 1, 160)
         n[k]++; last[k] = t; if (!(k in seen)) { seen[k] = 1; o[++m] = k }; want = 0 }
       END { for (i = m; i >= 1; i--) printf "%dx  %s | %s\n", n[o[i]], last[o[i]], o[i] }' | head -n 20
-  } 2>&1 | sed -E -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/<email>/g' \
-      -e 's/([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}/<mac>/g' -e 's/(^|[^0-9])[0-9]{14,17}([^0-9]|$)/\1<number>\2/g' |
-    if [ -n "$sn" ]; then sed "s/$sn/<serial>/g"; else cat; fi > $out
+  } 2>&1 | scrub > $out
   echo "$out"
   ;;
 dual5g-restore)
@@ -2545,6 +2760,7 @@ dual5g-restore)
 unflag)
   G=/data/data/com.google.android.gms; DB=$G/databases/phenotype.db; SQ=$AIR/sqlite3; W=$R/gms
   [ -x $SQ ] || { echo "the AirDrop download (with its sqlite3) isn't on the phone; pick AirDrop once to fetch it" >&2; exit 1; }
+  [ -f $DB ] || { echo "Play services database not available; flags not changed" >&2; exit 1; }
   rm -rf $W; mkdir -p $W; am force-stop com.google.android.gms
   cp $DB $W/p.db; [ -f $DB-wal ] && cp $DB-wal $W/p.db-wal
   in_list=""

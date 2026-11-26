@@ -13,7 +13,7 @@ die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 [ $# = 2 ] || { sed -n '2,4p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
 ROOT=$(cd "$(dirname "$0")/.." && pwd); IN=$1; OUT=$2
 command -v apktool >/dev/null || die "apktool not found"
-if command -v md5sum >/dev/null; then md5() { md5sum "$1" | cut -d' ' -f1; }; else md5() { md5 -q "$1"; }; fi
+if command -v md5sum >/dev/null; then md5() { md5sum "$1" | cut -d' ' -f1; }; else md5() { command md5 -q "$1"; }; fi   # macOS: without command this calls itself
 if command -v sha256sum >/dev/null; then sha() { sha256sum "$1" | cut -d' ' -f1; }; else sha() { shasum -a 256 "$1" | cut -d' ' -f1; }; fi
 W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
 

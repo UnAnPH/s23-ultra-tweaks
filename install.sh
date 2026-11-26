@@ -8,8 +8,8 @@ set -euo pipefail
 # below can read the rest of the script from stdin (curl | bash).
 main() {
 REPO=dtechterminal/s23-ultra-tweaks
-VERSION=v1.8.2
-AIRDROP_KBASE=5.15.197-android13-8-34343818-ab; AIRDROP_FW="S918WVLU8GZIF S918BXXUAGZIF S918U1UEU8GZIF S918USQU8GZIF S918NKSU8GZIF"   # as in device/tweaks.sh
+VERSION=v1.8.6
+AIRDROP_KBASE=5.15.197-android13-8-34343818-ab; AIRDROP_FW="S918WVLU8GZIF S918BXXUAGZIF S918U1UEU8GZIF S918USQU8GZIF S918NKSU8GZIF S9180ZHU8GZIF"   # as in device/tweaks.sh
 PHONE_DIR=/data/adb/s23tweaks          # state (and the code, when the module isn't installed)
 MODULE_DIR=/data/adb/modules/s23_ultra_tweaks
 
@@ -70,23 +70,23 @@ can_ksu=0; why_ksu="this phone's services.jar isn't one a patch was made from (S
 case " $HKS_MD5 " in *" ${jar_md5:-none} "*) can_ksu=1; why_ksu="" ;; esac
 # an Indian SIM (MCC 404/405) makes the carrier picks take the India config instead of plain call recording
 sim=$(sh_ getprop gsm.sim.operator.numeric | cut -d, -f1); sim_india=0; carrier_skip=india
-case "$sim" in 404*|405*) sim_india=1; carrier_skip=callrec ;; esac
+case "$sim" in 404*|405*|406*) sim_india=1; carrier_skip=callrec ;; esac
 
 # Language Core for callscreen: a 3.1 GB download, so the phone needs about 7 GB free while it installs
 can_lc=1; why_lc=""
 free_kb=$(sh_ "df -k /data | tail -n 1" | awk '{print $4}')
-lc_have=$(sh_ "dumpsys package com.samsung.android.offline.languagemodel 2>/dev/null | grep -m1 -oE 'versionCode=4[0-9]{8}'")
+lc_have=$(sh_ "dumpsys package com.samsung.android.offline.languagemodel 2>/dev/null | grep -m1 -oE 'versionCode=[4-9][0-9]{8}'")
 [ -z "$lc_have" ] && [ "${free_kb:-0}" -lt 7340032 ] && { can_lc=0; why_lc="needs about 7 GB free on the phone for its 3.1 GB download"; }
 
 # Tweaks, grouped in categories. A category letter picks every available tweak in it.
 ids=(airdrop wifi7 hotspot6g
      logvideo camextras camerahdr hdr2023 autoframe tenbit wideflash prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage anamorphic profps
      display colortone vulkan weather
-     galaxyai audioeraser settingssearch callscreen bargein
+     galaxyai highlights audioeraser settingssearch callscreen bargein
      battery features hideksu
      callrec india dual5g nronly natroam
      rambler)
-cat=(A A A B B B B B B B B B B B B B B B B C C C C D D D D D E E E F F F F F D)
+cat=(A A A B B B B B B B B B B B B B B B B C C C C D D D D D D E E E F F F F F D)
 cats=(A B C D E F)
 catname=("Connectivity" "Camera" "Display and graphics" "Galaxy AI and Samsung apps" "Battery and settings" "Carrier")
 desc=("AirDrop: Quick Share > Share with Apple devices (S24 Wi-Fi driver + Google's Mosey; 20 MB download)"
@@ -113,12 +113,13 @@ desc=("AirDrop: Quick Share > Share with Apple devices (S24 Wi-Fi driver + Googl
       "Vulkan rendering: apps draw with Vulkan instead of OpenGL"
       "Lock screen weather effect: rain, snow, fog or sun over the lock screen wallpaper, following Samsung Weather (installs a 12 KB AI Core stub app)"
       "Galaxy AI apps: the S24's Now Brief, Creative Studio and Call Assist (219 MB download)"
+      "Notification highlights: Galaxy AI sorts important notifications to the top of the panel and summarizes long or repeated chats, on the phone; needs a Samsung account, and summaries appear with the screen off"
       "Audio Eraser: remove wind, noise, music or voices from videos in Gallery (34 MB download)"
       "Settings search: the S24's new Settings search bar; natural-language answers stay off (10 MB download)"
       "Call screening: installs Samsung Language Core; screening and voice messages work, the AI summary doesn't (persistent; 3.1 GB download)"
       "Bixby barge-in: talk over Bixby while it answers (untested)"
       "Battery health page: Settings > Battery > Battery information shows health and cycles"
-      "Extra settings: Auto power on/off schedule, louder VoIP calls"
+      "Extra settings: louder VoIP calls (and Auto power on/off on Chinese models)"
       "HideKSU: hide the KernelSU root manager from apps, so root-aware apps like CRED stop crashing (patched services.jar; 12 MB download; needs the KernelSU manager installed)"
       "Call recording in the Samsung Phone app"
       "India carrier config for Airtel/Jio SIMs: 'Use 5G standalone networks' switch, call recording, Smart IVR, message cards, plus Samsung Wallet India (UPI, DigiLocker, transit) and the 6 GHz hotspot by reporting the phone as the Indian model; reverts on reboot, the sales code on disk is untouched"
@@ -126,8 +127,8 @@ desc=("AirDrop: Quick Share > Share with Apple devices (S24 Wi-Fi driver + Googl
       "Network mode: 'LTE only' and '5G only' for both SIMs (Settings > Connections > Mobile networks > Network mode; 5G only means standalone 5G, with no signal where there is none)"
       "India: no 'R' roaming icon on national roaming (an Airtel or Jio SIM from another circle counts as home; roaming abroad still shows)"
       "Gboard Rambler: the Pixel 10/11's Gemini voice typing that drops filler words and takes spoken edits (Gboard settings > Voice typing > Dictation type > Rambler)")
-avail=($can_airdrop $can_airdrop 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 $can_ct 1 1 1 1 1 $can_lc 1 1 1 $can_ksu $can_rec $can_csc 1 1 1 1)
-why=("$why_airdrop" "$why_airdrop" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "$why_ct" "" "" "" "" "" "$why_lc" "" "" "" "$why_ksu" "$why_rec" "$why_csc" "" "" "" "")
+avail=($can_airdrop $can_airdrop 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 $can_ct 1 1 1 1 1 1 $can_lc 1 1 1 $can_ksu $can_rec $can_csc 1 1 1 1)
+why=("$why_airdrop" "$why_airdrop" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "$why_ct" "" "" "" "" "" "" "$why_lc" "" "" "" "$why_ksu" "$why_rec" "$why_csc" "" "" "" "")
 
 # pre-release builds lived in /data/local/tmp/s23tweaks: carry the picks and the Play services backup over
 sh_ "su -c '[ -d /data/local/tmp/s23tweaks ] && [ ! -e $PHONE_DIR/choices ] && mkdir -p $PHONE_DIR && cp -r /data/local/tmp/s23tweaks/choices /data/local/tmp/s23tweaks/backup $PHONE_DIR/ 2>/dev/null; true'" >/dev/null
@@ -169,8 +170,9 @@ if [ -z "$picked" ]; then
     done
   done
   info "Pick whole categories by letter and single tweaks by number, e.g. \"A B 16\"."
-  if [ $sim_india = 1 ]; then info "Indian SIM: category F picks ${#ids[@]} (India config, includes call recording)."
-  else info "Category F picks call recording only; ${#ids[@]} (India config, for Indian SIMs) already includes it."; fi
+  ii=0; for i in "${!ids[@]}"; do [ "${ids[$i]}" = india ] && ii=$((i+1)); done
+  if [ $sim_india = 1 ]; then info "Indian SIM: category F takes India ($ii), which includes call recording."
+  else info "Category F takes call recording; $ii (India config, for Indian SIMs) includes it too."; fi
   r=$(ask "Letters/numbers separated by spaces, Enter for all available: ")
   add() { case " $picked " in *" $1 "*) ;; *) picked="$picked $1" ;; esac; }
   if [ -z "$r" ]; then
@@ -188,7 +190,7 @@ if [ -z "$picked" ]; then
     i=$((n-1)); [ "${avail[$i]}" = 1 ] || die "${ids[$i]} is unavailable on this phone: ${why[$i]}"
     add "${ids[$i]}"
   done
-  case " $picked " in *" india "*) picked=$(echo "$picked" | sed 's/ callrec//') ;; esac
+  case " $picked " in *" india "*) picked=$(echo "$picked" | sed 's/^callrec //; s/ callrec//') ;; esac   # india carries call recording
   case " $picked " in *" wifi7 "*) case " $picked " in *" airdrop "*) ;; *) info "wifi7 runs on the AirDrop Wi-Fi driver, so airdrop is added too."; picked="airdrop $picked" ;; esac ;; esac
   picked=$(echo $picked)
 fi

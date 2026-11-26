@@ -6,6 +6,11 @@ The tweaks come in six categories. The module page lets you pick a whole categor
 Each one works on any S23 Ultra on One UI 9 unless it says otherwise.
 
 **What's new** (details in the [changelog](CHANGELOG.md)):
+- **v1.8.6**: new **Notification highlights** tweak (Galaxy AI sorts important notifications to the top; summaries stay empty on the S23, which has no model for them); `wifi7` no longer turns itself off when you apply with Wi-Fi switched off; the status says when `hideksu`'s hiding daemon has stopped; colortone and highlights stack correctly; `dual5g` sees the modem come back after its restart; reports mask Quick Share names; installer and module page fixes (Language Core 5.x, Indian SIMs on MCC 406).
+- **v1.8.5**: Status → **Record an AirDrop test** records one share attempt and says which stage it reached; the module refuses to apply after being removed earlier in the same boot (that left the camera crashing), and the bug report's kernel log works from the module page.
+- **v1.8.4**: `hideksu` keeps hiding the module's mounts from apps after hours of use (the `hidemnt` daemon no longer exits when bursts of app starts overflow its event queue).
+- **v1.8.3**: one switch for every frame-rate unlock (`profps` now includes `cam24fps` and `slowmo4k120`, and Slow motion 4K120 survives a reboot), AirDrop on the SM-S9180, and a `rambler` fix for an empty Gboard override file.
+- **v1.8.2**: Log video keeps its lifted shadows in dark scenes at 24/25/30 fps (`logvideo`).
 - **v1.8.1**: Gboard's Rambler voice typing from the Pixel 10 and 11 (`rambler`).
 - **v1.8.0**: LTE only and 5G only in Network mode for both SIMs (`nronly`), and no national-roaming R for Indian SIMs (`natroam`).
 - **v1.7.2**: fixes Chromium browsers such as Vivaldi crashing on launch with `hideksu` on ("GPU process isn't usable").
@@ -75,6 +80,7 @@ All ten camera tweaks added in this fork — frame-rate unlocks (24 fps, the ext
 
 - 🧠 **24 · Now Brief, Creative Studio and Call Assist** from the S24 · `galaxyai`
   - Works on: firmware S918WVLU8GZIF (219 MB download)
+- 🔔 **38 · Notification highlights**: Galaxy AI moves the notifications Android thinks important to the top of the panel and summarizes long or repeated chat notifications. The S23 firmware already has the whole feature (the panel code, the Settings pages and the on-phone summarizer in `com.samsung.android.intellivoiceservice`); what it lacks is the AI version flag that switches it on, so the tweak sets that and turns both features on. Summaries run on the phone (no network) when the screen is off and the phone is idle, and need a Samsung account. The model weights are not on this phone (Samsung ships them as `com.samsung.android.offline.language.model` for `sm8650` and newer, not for the S23's `sm8550`), so the switches are on and the pipeline runs but summaries stay empty until Samsung supports this chipset. The tweak also reveals the page the build hides (Notifications → Advanced settings → Notification highlights) by patching the Settings APK in RAM, so the switches are visible; undo un-picks the tweak · `highlights`
 - 🔇 **25 · Audio Eraser**: Gallery → video → Edit → remove wind, noise, music or voices · `audioeraser`
   - Works on: firmware S918WVLU8GZIF (34 MB download)
 - 🔎 **26 · Settings search** bar from the S24. Natural-language answers stay off (they need Samsung's Semantic Search Core 4.x) · `settingssearch`
@@ -87,7 +93,7 @@ All ten camera tweaks added in this fork — frame-rate unlocks (24 fps, the ext
 ### 🔋 Battery and settings
 
 - 🩺 **29 · Battery health**: Settings → Battery → Battery information shows health and cycle count · `battery`
-- ⏰ **30 · Auto power on/off** schedule and **louder VoIP calls** · `features`
+- ⏰ **30 · Louder VoIP calls**, and the **Auto power on/off** schedule on Chinese models only: Samsung's Settings shows the schedule (General management → Reset) only when the phone's CSC country is CN *and* the flag is set (`Rune.isChinaModel()`), so on other S23s the flag alone can't bring it (issue #33) · `features`
 - 🫥 **31 · HideKSU**: hides the KernelSU root manager (`me.weishu.kernelsu`) from apps, so root-aware apps like CRED stop detecting root and crashing. Nothing is injected into the apps, so their in-process tamper scans stay clean. The manager stays installed — its launcher icon, DFRoot's boot-time root and the system still see it; only third-party apps don't. Needs the KernelSU manager installed. It replaces `services.jar` with a patched copy of the phone's own, so it only runs on a phone whose stock `services.jar` is one a patch was made from (checked by MD5, whatever the firmware name): so far the SM-S918W's (S918WVLU8GZIF), an SM-S918B INS one and an SM-S918U1 one. Applies on a framework restart. It also **hides the module's own mounts** from every user-installed app automatically (keeping them for the preinstalled Samsung apps that consume them; see [Hiding the module's mounts](#hiding-the-modules-mounts)), so mount-scanning detectors and banking apps don't see the tweaks' bind/overlay mounts · `hideksu`
 
 ### 📱 Carrier
@@ -195,6 +201,8 @@ with what you expected and what happened. Without the module page:
 # prints the report file's path
 adb shell su -c "sh /data/adb/modules/s23_ultra_tweaks/tweaks.sh report"
 ```
+
+**AirDrop doesn't find the Apple device or doesn't send?** First run Status → **Record an AirDrop test**: it records 90 seconds of logs while you try one share, says which stage the share reached, and saves the log in Download. Then make the bug report (it includes the test's result) and attach both files. Without the module page: `adb shell su -c "sh /data/adb/modules/s23_ultra_tweaks/tweaks.sh airdrop-test 90"`, then share within the 90 seconds.
 
 The report has the phone model, firmware, kernel and app versions, which tweaks are on and why any
 aren't offered, the camera and feature settings the tweaks change (and what the phone had before),
@@ -435,7 +443,7 @@ items (the flags do nothing on their own; `tweaks.sh unflag` removes just them).
 
 ## ⚠️ Known limitations
 
-- **AirDrop needs One UI 9 build GZIF** (S918WVLU8GZIF, S918BXXUAGZIF, S918U1UEU8GZIF, S918USQU8GZIF or S918NKSU8GZIF). The modules are built on the S918W kernel. The other four have the same Wi-Fi drivers and the same kernel symbol CRCs, checked with `tools/kocompat.py` and `tools/modcmp.py` against their firmware files, but only the S918W and S918B have been tested on a phone. A different build needs the modules rebuilt (below).
+- **AirDrop needs One UI 9 build GZIF** (S918WVLU8GZIF, S918BXXUAGZIF, S918U1UEU8GZIF, S918USQU8GZIF, S918NKSU8GZIF or S9180ZHU8GZIF). The modules are built on the S918W kernel. The other five have the same Wi-Fi drivers and the same kernel symbol CRCs, checked with `tools/kocompat.py` and `tools/modcmp.py` against their firmware files, but only the S918W and S918B have been tested on a phone. A different build needs the modules rebuilt (below).
   - **Custom kernels** (untested, opt-in): on one of those builds with a non-Samsung 5.15 android13 kernel, `su -c touch /data/adb/s23tweaks/allow-any-kernel` lets AirDrop and Wi-Fi 7 try anyway. The kernel needs `CONFIG_MODVERSIONS` and must not force module signatures. It still refuses the modules if any kernel symbol they use has a different CRC, and the module then puts the stock Wi-Fi driver back. Delete the file to go back to the check. AirDrop also needs the kernel's stock Wi-Fi stack: a kernel that ships its own `cfg80211.ko` (its `vermagic` isn't `5.15.197-android13-8-34343818-ab…`) makes the S24 driver fail to register, so AirDrop is shown as not available there; Wi-Fi 7 and the 6 GHz hotspot still work (issue #21).
 - **Horizontal lock levels only up to about 20°** and isn't the S26's 360° lock (see [Horizontal lock](#horizontal-lock)).
 - The Wi-Fi link to the PCIe bus stays at Gen2, so very large transfers may be slower than on an S24.

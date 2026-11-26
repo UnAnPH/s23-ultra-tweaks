@@ -1,0 +1,37 @@
+# Notification highlights: SecSettings.apk (S918BXXUAGZIF, md5 5b20b1a68f94d01bba5a776e15ffdc30) -> md5 9d87d879ce01bd65c98cd7dfcf1063ab
+# SecNotificationIntelligenceController.getAvailabilityStatus() returns 3 while
+# com.android.settings:bool/config_na_enable is false; changing that literal to 0 makes it available.
+# The other bytes are that dex's SHA-1 and adler32 and the zip CRCs. Made by tools/nhpatch.py.
+# Format: <zero-based file offset> <new byte in octal>
+18194066 322
+18194067 170
+18194068 151
+18194069 247
+18194108 223
+18194110 62
+18194111 222
+18194112 16
+18194113 364
+18194114 76
+18194115 363
+18194116 320
+18194117 367
+18194118 255
+18194119 210
+18194120 236
+18194121 101
+18194122 243
+18194123 161
+18194124 246
+18194125 217
+18194126 257
+18194127 161
+18194128 150
+18194129 17
+18194130 315
+18194131 314
+22950523 2
+117133100 322
+117133101 170
+117133102 151
+117133103 247

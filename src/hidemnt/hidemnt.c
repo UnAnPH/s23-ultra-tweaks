@@ -37,6 +37,12 @@
  *
  * A single setns()+umount2() pass is microseconds, so when the daemon fires on the fork/comm event
  * it finishes before the app's own code (e.g. a native root check in onCreate) reads the mounts.
+ *
+ * The daemon must not exit on its own: if it stops, every app started afterwards sees the mounts
+ * again, with nothing in the status but "visible to apps" (issue #34). A burst of process starts
+ * (browsers, video apps) can overflow the netlink socket's receive queue; recv() then fails with
+ * ENOBUFS and the events in between are lost. That is recoverable: sweep /proc for any app whose
+ * event was dropped and keep listening. Any other socket error reopens the socket.
  */
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -446,9 +452,28 @@ static int hide_in(int pid)
 	return done;
 }
 
+/* true if pid's mountinfo still has a module mount (read in the daemon's own namespace: cheap) */
+static int has_module_mounts(int pid)
+{
+	char p[64], line[4096];
+	snprintf(p, sizeof(p), "/proc/%d/mountinfo", pid);
+	FILE *f = fopen(p, "re");
+	if (!f)
+		return 0;
+	int found = 0;
+	while (!found && fgets(line, sizeof(line), f))
+		found = strstr(line, TOKEN) != NULL;
+	fclose(f);
+	return found;
+}
+
 /* fork a child that does hide_in (so the daemon stays in init's namespace) */
 static void hide_fork(int pid)
 {
+	/* An app gets several events (COMM, EXEC) and sweeps revisit it; once hidden there is nothing to
+	 * do, and skipping the fork keeps the daemon fast enough to drain bursts of events. */
+	if (!has_module_mounts(pid))
+		return;
 	pid_t c = fork();
 	if (c == 0) {
 		_exit(hide_in(pid) < 0 ? 1 : 0);
@@ -476,22 +501,21 @@ static void sweep(void)
 	closedir(d);
 }
 
-static int daemon_loop(const char *ovfile)
+/* open a netlink socket subscribed to process events, or -1 */
+static int open_proc_socket(void)
 {
-	refresh_tables(ovfile);		/* load package db + overrides */
-	sweep();			/* catch apps already running */
-
 	int s = socket(PF_NETLINK, SOCK_DGRAM | SOCK_CLOEXEC, NETLINK_CONNECTOR);
-	if (s < 0) {
-		perror("hidemnt: netlink socket");
-		return 1;
-	}
-	struct sockaddr_nl addr = { .nl_family = AF_NETLINK, .nl_pid = (unsigned)getpid(),
-				    .nl_groups = CN_IDX_PROC };
+	if (s < 0)
+		return -1;
+	/* A larger receive queue rides out bursts of process starts. FORCE needs CAP_NET_ADMIN (root has
+	 * it) and ignores net.core.rmem_max; fall back to the capped size. */
+	int rcv = 4 << 20;
+	if (setsockopt(s, SOL_SOCKET, SO_RCVBUFFORCE, &rcv, sizeof(rcv)) != 0)
+		setsockopt(s, SOL_SOCKET, SO_RCVBUF, &rcv, sizeof(rcv));
+	struct sockaddr_nl addr = { .nl_family = AF_NETLINK, .nl_pid = 0, .nl_groups = CN_IDX_PROC };
 	if (bind(s, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
-		perror("hidemnt: bind");
 		close(s);
-		return 1;
+		return -1;
 	}
 	/* subscribe to process events */
 	struct {
@@ -507,20 +531,50 @@ static int daemon_loop(const char *ovfile)
 	sub.cn.len = sizeof(enum proc_cn_mcast_op);
 	sub.op = PROC_CN_MCAST_LISTEN;
 	if (send(s, &sub, sizeof(sub), 0) != (ssize_t)sizeof(sub)) {
-		perror("hidemnt: subscribe");
 		close(s);
+		return -1;
+	}
+	return s;
+}
+
+static int daemon_loop(const char *ovfile)
+{
+	/* a root daemon, but keep the kernel's OOM killer from ever picking it */
+	int ofd = open("/proc/self/oom_score_adj", O_WRONLY | O_CLOEXEC);
+	if (ofd >= 0) {
+		if (write(ofd, "-1000", 5) < 0) { /* best effort */ }
+		close(ofd);
+	}
+	signal(SIGCHLD, SIG_IGN);	/* reap nothing: children are waited in hide_fork */
+	refresh_tables(ovfile);		/* load package db + overrides */
+
+	int s = open_proc_socket();	/* before the first sweep, so no spawn falls between the two */
+	if (s < 0) {
+		perror("hidemnt: process events");	/* kernel without the proc connector: can't work */
 		return 1;
 	}
+	sweep();			/* catch apps already running */
 
-	signal(SIGCHLD, SIG_IGN);	/* reap nothing: children are waited in hide_fork */
 	char buf[4096];
 	char name[256];
 	for (;;) {
 		ssize_t len = recv(s, buf, sizeof(buf), 0);
+		if (len < 0 && errno == EINTR)
+			continue;
+		if (len < 0 && errno == ENOBUFS) {
+			/* the queue overflowed and events were dropped: catch up on the apps they named */
+			refresh_tables(ovfile);
+			sweep();
+			continue;
+		}
 		if (len <= 0) {
-			if (errno == EINTR)
-				continue;
-			break;
+			/* any other error: reopen the socket (retrying every few seconds), then catch up */
+			close(s);
+			while ((s = open_proc_socket()) < 0)
+				sleep(5);
+			refresh_tables(ovfile);
+			sweep();
+			continue;
 		}
 		refresh_tables(ovfile);	/* pick up edits to the override file / new installs */
 		for (struct nlmsghdr *nlh = (struct nlmsghdr *)buf; NLMSG_OK(nlh, (unsigned)len);
@@ -544,8 +598,6 @@ static int daemon_loop(const char *ovfile)
 				hide_fork(pid);
 		}
 	}
-	close(s);
-	return 0;
 }
 
 int main(int argc, char **argv)
