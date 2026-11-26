@@ -20,9 +20,9 @@
 #   loop | guard      (internal) keep mosey_server running / reboot cleanly on a Wi-Fi firmware crash
 # Tweaks: airdrop battery features callrec india hotspot6g wifi7 display logvideo vulkan
 #         camerahdr hdr2023 audioeraser colortone galaxyai camextras autoframe settingssearch bargein
-#         callscreen tenbit hideksu cam24fps weather wideflash
+#         callscreen tenbit hideksu weather wideflash
 #         prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage
-#         anamorphic profps slowmo4k120 dual5g nronly natroam rambler  (see README.md; the categories they're grouped in are in install.sh and the WebUI)
+#         anamorphic profps dual5g nronly natroam rambler  (see README.md; the categories they're grouped in are in install.sh and the WebUI)
 #
 # Nothing here writes to a partition. Every change is a module load, an overlay, a bind mount or a
 # runtime setting, so a reboot always returns the phone to stock. The files themselves stay on storage
@@ -48,8 +48,8 @@ V=${S23T_STATE:-/data/adb/s23tweaks}         # state: choices, logs, backups, au
 mkdir -p $V; L=$V/tweaks.log; R=$V/run
 [ -f $D/module.prop ] && MODULE=1 || MODULE=0
 APPLY_LOCK=/dev/s23tweaks_apply.lock         # /dev is tmpfs: locks never survive a reboot
-STAYS_TILL_REBOOT="airdrop wifi7 battery india callrec vulkan audioeraser hdr2023 colortone tenbit galaxyai settingssearch hideksu cam24fps"
-TWEAK_IDS="airdrop battery features callrec india hotspot6g wifi7 display logvideo vulkan camerahdr hdr2023 audioeraser colortone galaxyai camextras autoframe settingssearch bargein callscreen tenbit hideksu cam24fps weather wideflash prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage anamorphic profps slowmo4k120 dual5g nronly natroam rambler"
+STAYS_TILL_REBOOT="airdrop wifi7 battery india callrec vulkan audioeraser hdr2023 colortone tenbit galaxyai settingssearch hideksu profps"
+TWEAK_IDS="airdrop battery features callrec india hotspot6g wifi7 display logvideo vulkan camerahdr hdr2023 audioeraser colortone galaxyai camextras autoframe settingssearch bargein callscreen tenbit hideksu weather wideflash prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage anamorphic profps dual5g nronly natroam rambler"
 GMS_MIN=261125000                            # Play services 26.11, the first with Mosey support
 # Firmware the AirDrop/Wi-Fi 7 kernel modules are checked against (one line each, read by customize.sh).
 # All are One UI 9 build GZIF on GKI kernel 34343818, and their whole Wi-Fi stack (cnss2, mhi, cfg80211,
@@ -120,7 +120,7 @@ S918BXXUAGZIF 5b20b1a68f94d01bba5a776e15ffdc30 de6d142d238849198810dfe70fada8dd"
 ead_row() { echo "$SETTINGS_EAD" | awk -v b="$(getprop ro.build.PDA)" '$1 == b'; }
 ead_builds() { echo "$SETTINGS_EAD" | awk '{print $1}' | tr '\n' ' ' | sed 's/ $//; s/ / or /g'; }
 CAM_APK=/system/priv-app/SamsungCamera/SamsungCamera.apk
-# cam24fps, keyed on the Camera APK itself, not the firmware: md5 of a stock SamsungCamera.apk, md5 once
+# profps, keyed on the Camera APK itself, not the firmware: md5 of a stock SamsungCamera.apk, md5 once
 # patched, the patch in files/, and the firmware it came from. Any firmware whose stock Camera APK is listed
 # works; tools/cam24patch.py makes the patch and prints both md5s for another APK.
 CAMERA_24FPS="174e38e111f53c92eea54fd8b9a8c1c6 b22942b22ec14896bc02277d319b7623 SamsungCamera-24fps-S918BXXUAGZIF.patch S918BXXUAGZIF
@@ -160,6 +160,16 @@ mounted() { mount | grep -q " $1 type $2"; }
 bound() { mount | grep -q " $1 "; }
 running() { ps -A -o ARGS | grep -q "[t]weaks.sh $1"; }
 has() { case " $TWEAKS " in *" $1 "*) return 0 ;; esac; return 1; }
+# cam24fps and slowmo4k120 were folded into profps (they share the same Camera APK patch and
+# camera-feature.xml edit). A saved picks list from an older module may still name them: map both
+# to profps and drop duplicates.
+migrate_choices() {
+  mc_o=""; for mc_x in $1; do
+    case "$mc_x" in cam24fps|slowmo4k120) mc_x=profps ;; esac
+    case " $mc_o " in *" $mc_x "*) ;; *) mc_o="$mc_o${mc_o:+ }$mc_x" ;; esac
+  done
+  echo "$mc_o"
+}
 md5() { md5sum "$1" 2>/dev/null | cut -d' ' -f1; }
 # The apply lock is a directory holding the owner's pid. A lock whose owner is gone (killed apply)
 # counts as free, so a crash can't block every later apply until the next reboot.
@@ -494,10 +504,14 @@ ff_apply() {
 #  extstorage: recording straight to a USB-C SSD/drive, in every video mode (camfeat_apply flips
 #              external-storage-support="false" to "true" on the resolution map lines).
 #  anamorphic: Camera Assistant's anamorphic lens desqueeze (1.33x / 1.55x / 2.0x).
-#  profps: extra Pro video frame rates: 4K 25/48/50, FHD 25/48/50/100 and 8K 25. The 10x tele
-#          stays hidden in these modes unless the Camera APK patch is bound (cam24fps/profps).
-#  slowmo4k120: 4K120 and FHD120 in Slow motion (slow_motion added to their modes), and the
-#          FHD240 entry rebuilt for the Slow motion menu so the resolution list is complete.
+#  profps: extra Pro video frame rates (4K 25/48/50/100/120, FHD 25/48/50/100, 8K 25 and the
+#          21:9 Cinema rates), plus Slow motion 4K120 and FHD120 (slow_motion added to their
+#          modes) and the FHD240 entry rebuilt so the resolution list is complete. The 10x tele
+#          stays hidden in the Pro modes unless the Camera APK patch is bound (profps).
+#          cam24fps (24 fps in standard Video, rear and front) and slowmo4k120 (4K120/FHD120 in
+#          Slow motion, FHD240 rebuilt) are folded into this tweak: all three need the same Camera
+#          APK patch and camera-feature.xml edit. slowmo4k120's own availability check ran before
+#          camfeat_apply added the 4K120 entry, so a boot apply on stock firmware skipped it.
 # Never add SUPPORT_BACK_WIDE_NORMAL_DUAL_PORTRAIT_VIDEO, SUPPORT_BACK_PORTRAIT_VIDEO_TELE_DUAL or
 # CAMERA_SUPPORT_SEAMLESS_PORTRAITVIDEO: on the S23 they crash the camera ("Zoom is not supported").
 CF_LOG='<local name="SUPPORT_LOG_VIDEO" value="true"/>'
@@ -518,7 +532,7 @@ CF_PROFPS='<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_25FPS" v
 <local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_50FPS" value="true" hdr="true" hdr10="true" snapshot-support="true" snapshot-size="4000x2252" vdis="true" super-vdis="true" effect="true" object-tracking="true" seamless-zoom-support="true" physical-zoom-supported="false" external-storage-support="true" touch-af="true" supported-mode="pro_video"/>
 <local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_100FPS" value="true" hdr="true" hdr10="false" snapshot-support="false" snapshot-size="4000x2252" vdis="false" super-vdis="false" effect="false" object-tracking="false" seamless-zoom-support="false" physical-zoom-supported="false" external-storage-support="true" supported-mode="pro_video"/>
 <local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_7680X4320_25FPS" value="true" hdr="true" hdr10="false" snapshot-support="true" snapshot-size="4000x2252" vdis="true" super-vdis="false" effect="false" object-tracking="false" seamless-zoom-support="false" physical-zoom-supported="false" external-storage-support="true" touch-af="true" supported-mode="pro_video"/>
-<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_120FPS" value="true" hdr="true" hdr10="false" snapshot-support="false" snapshot-size="4000x2252" vdis="false" super-vdis="false" effect="false" object-tracking="false" seamless-zoom-support="false" physical-zoom-supported="false" external-storage-support="true" supported-mode="pro_video"/>
+<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_120FPS" value="true" hdr="true" hdr10="false" snapshot-support="false" snapshot-size="4000x2252" vdis="false" super-vdis="false" effect="false" object-tracking="false" seamless-zoom-support="false" physical-zoom-supported="false" external-storage-support="true" supported-mode="pro_video,slow_motion"/>
 <local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_100FPS" value="true" hdr="true" hdr10="false" snapshot-support="false" snapshot-size="4000x2252" vdis="false" super-vdis="false" effect="false" object-tracking="false" seamless-zoom-support="false" physical-zoom-supported="false" external-storage-support="true" supported-mode="pro_video"/>
 <local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X1644_25FPS" value="true" hdr="true" hdr10="true" snapshot-support="true" snapshot-size="4000x1716" vdis="true" super-vdis="false" effect="false" object-tracking="true" seamless-zoom-support="true" physical-zoom-supported="false" external-storage-support="true" touch-af="true" supported-mode="pro_video"/>
 <local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X1644_48FPS" value="true" hdr="true" hdr10="true" snapshot-support="true" snapshot-size="4000x1716" vdis="true" super-vdis="false" effect="false" object-tracking="true" seamless-zoom-support="false" physical-zoom-supported="true" external-storage-support="true" touch-af="true" supported-mode="pro_video"/>
@@ -547,7 +561,7 @@ camfeat_apply() {
   # preserve all stock attributes (vdis, hdr, hdr10, seamless-zoom-support) when enabling video mode on 24 fps entries
   for n in ${cf_video_modes:-}; do
     o=$(grep -m1 "name=\"$n\"" $R/cf.new || true)
-    [ -n "$o" ] || { log "cam24fps: $n not found in $CF; skipped"; continue; }
+    [ -n "$o" ] || { log "profps: $n not found in $CF; skipped"; continue; }
     m=$(printf '%s' "$o" | sed -n 's/.*supported-mode="\([^"]*\)".*/\1/p')
     case ",$m," in
       *,video,*) nl=$o ;;
@@ -558,12 +572,13 @@ camfeat_apply() {
     grep -v "name=\"$n\"" $R/cf.new > $R/cf.tmp && mv $R/cf.tmp $R/cf.new
     printf '%s\n' "$nl" >> $R/cf.new
   done
-  # Slow motion: add slow_motion to the 4K120 and FHD120 entries in place (keeping their position
-  # and stock attributes), then put the rebuilt FHD240 entry last, as the working adb rebuild does.
-  if has slowmo4k120; then
+  # Slow motion: profps adds the 4K120 entry above through cf_add, already with slow_motion in its
+  # modes; add slow_motion to the FHD120 entry in place (keeping its position and stock attributes),
+  # then put the rebuilt FHD240 entry last, as the working adb rebuild does.
+  if has profps; then
     for n in ${cf_slowmo_modes:-}; do
       o=$(grep -m1 "name=\"$n\"" $R/cf.new || true)
-      [ -n "$o" ] || { log "slowmo4k120: $n not found in $CF; skipped"; continue; }
+      [ -n "$o" ] || { log "profps: $n not found in $CF; skipped"; continue; }
       m=$(printf '%s' "$o" | sed -n 's/.*supported-mode="\([^"]*\)".*/\1/p')
       case ",$m," in
         *,slow_motion,*) ;;
@@ -579,7 +594,7 @@ camfeat_apply() {
     done
     grep -v 'name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_240FPS"' $R/cf.new > $R/cf.tmp && mv $R/cf.tmp $R/cf.new
     echo "    $CF_SM_240FPS" >> $R/cf.new
-    log "slowmo4k120: 4K120 and FHD120 in Slow motion, FHD240 menu entry rebuilt"
+    log "profps: 4K120 and FHD120 in Slow motion, FHD240 menu entry rebuilt"
   fi
   # USB-C storage: allow recording straight to an external drive in every video mode
   if has extstorage; then
@@ -1186,16 +1201,14 @@ colortone_bind() {
   log "colortone: Adaptive color tone on (Settings > Display)"
 }
 cam24fps_bind() {
-  cam24_soft=${1:-}
   set -- $(cam24_row)
   if [ -z "$1" ]; then
-    if [ -n "$cam24_soft" ]; then log "profps: this Camera APK has no 10x patch; the XML frame rates still apply and the 10x stays hidden"; return 0; fi
-    log "cam24fps: this Camera APK isn't one the patch was made for (Camera 17.0.00.43 of $(cam24_builds)), so 24 fps stays hidden"; return 1
+    log "profps: this Camera APK isn't one the frame-rate patch was made for (Camera 17.0.00.43 of $(cam24_builds)); the XML frame rates still apply, 24 fps and the 10x stay hidden"; return 0
   fi
+  pm path com.sec.android.app.camera 2>/dev/null | grep -q "^package:$CAM_APK$" ||
+    { log "profps: Samsung Camera is updated from the Galaxy Store; the XML frame rates still apply, 24 fps and the 10x stay hidden until its updates are uninstalled"; return 0; }
   CAM_STOCK_MD5=$1; CAM_PATCHED_MD5=$2; cpf=$3
-  if [ -n "$cam24_soft" ] && ! grep -q BACK_SECOND_TELE $D/files/$cpf 2>/dev/null; then
-    log "profps: this firmware's Camera patch doesn't unhide the 10x; the XML frame rates still apply"; return 0
-  fi
+  [ -f $D/files/$cpf ] || { log "profps: patch file $cpf is missing; the XML frame rates still apply, 24 fps and the 10x stay hidden"; return 0; }
   cm=$(md5sum $CAM_APK | cut -d' ' -f1)
   if [ "$cm" = $CAM_PATCHED_MD5 ]; then :   # already patched (an earlier apply this boot)
   else
@@ -1207,17 +1220,19 @@ cam24fps_bind() {
         printf "\\$oct" | dd of=$P.new bs=1 seek=$off conv=notrunc 2>/dev/null; done
       if [ "$(md5sum $P.new | cut -d' ' -f1)" != $CAM_PATCHED_MD5 ]; then
         rm -f $P.new
-        [ -n "$cam24_soft" ] && { log "profps: the Camera patch didn't match this APK; the 10x stays hidden"; return 0; }
-        fail "cam24fps: Camera patch gave the wrong file"
+        log "profps: the Camera patch didn't match this APK; the XML frame rates still apply, 24 fps and the 10x stay hidden"; return 0
       fi
       mv $P.new $P
     fi
     chmod 644 $P; chcon u:object_r:system_file:s0 $P
-    mount -o bind,ro $P $CAM_APK || fail "cam24fps: bind $CAM_APK"
+    mount -o bind,ro $P $CAM_APK || fail "profps: bind $CAM_APK"
     am force-stop com.sec.android.app.camera
   fi
-  if [ -n "$cam24_soft" ]; then log "profps: 10x super tele unhidden at 25/48/50 fps in Pro video"
-  else log "cam24fps: 24 FPS in standard Video on (Camera > Video > FHD / UHD / 8K at 24 fps)"; fi
+  if grep -q BACK_SECOND_TELE $D/files/$cpf 2>/dev/null; then
+    log "profps: 24 fps in standard Video, extra Pro video rates, 10x at 25/48/50 and Slow motion 4K120/FHD120 on"
+  else
+    log "profps: 24 fps in standard Video, extra Pro video rates and Slow motion 4K120/FHD120 on; this Camera patch doesn't unhide the 10x"
+  fi
 }
 
 # Now Brief, Creative Studio, Call Assist: the S24 firmware ships newer builds of these three apps.
@@ -2063,17 +2078,8 @@ why_not() {
         { echo "this phone's /system/framework/services.jar (md5 $m) isn't one a patch was made from ($(echo "$HIDEKSU_JARS" | cut -d' ' -f3- | tr '\n' ',' | sed 's/,$//; s/,/, /g')); tools/hideksupatch.sh can make one"; return; }
       pm path me.weishu.kernelsu >/dev/null 2>&1 || echo "the KernelSU manager (me.weishu.kernelsu) isn't installed, so there's nothing to hide" ;;
     hdr2023) for f in $H23_LIBS; do [ -f /system/lib64/$f ] || { echo "this phone has no /system/lib64/$f to replace"; return; }; done ;;
-    logvideo|camextras|wideflash|prowbtint|zoomrocker|slowmoaf|extstorage|anamorphic|profps) grep -q '</resources>' $CF 2>/dev/null || echo "this firmware's $CF can't be edited" ;;
-    slowmo4k120)
-      grep -q '</resources>' $CF 2>/dev/null || { echo "this firmware's $CF can't be edited"; return; }
-      grep -q 'BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_120FPS' $CF 2>/dev/null || echo "this firmware has no 4K120 entry to enable in Slow motion" ;;
-    cam24fps)
-      [ -f $CAM_APK ] || { echo "this phone has no $CAM_APK"; return; }
-      pm path com.sec.android.app.camera 2>/dev/null | grep -q "^package:$CAM_APK$" || { echo "uninstall Samsung Camera updates first so stock $CAM_APK is active"; return; }
-      set -- $(cam24_row)
-      [ -n "$1" ] || { echo "this phone's Samsung Camera isn't one the 24 fps patch was made for (Camera 17.0.00.43 of $(cam24_builds)); tools/cam24patch.py can make one"; return; }
-      [ -f $D/files/$3 ] || { echo "patch file $3 missing"; return; }
-      grep -q '</resources>' $CF 2>/dev/null || echo "this firmware's $CF can't be edited" ;;
+    logvideo|camextras|wideflash|prowbtint|zoomrocker|slowmoaf|extstorage|anamorphic) grep -q '</resources>' $CF 2>/dev/null || echo "this firmware's $CF can't be edited" ;;
+    profps) grep -q '</resources>' $CF 2>/dev/null || echo "this firmware's $CF can't be edited" ;;
     galaxyai)
       for p in $GAI_APPS; do [ -f /system/$p/${p#*/}.apk ] || { echo "this phone has no /system/$p/${p#*/}.apk to replace"; return; }; done ;;
     settingssearch) [ -f /system/$SSI/SecSettingsIntelligence.apk ] || echo "this phone has no /system/$SSI to replace" ;;
@@ -2117,8 +2123,15 @@ is_on() {
     slowmoaf) bound $CF && grep -q 'name="SUPPORT_SLOW_MOTION_AF_DURING_RECORDING" value="true"' $CF 2>/dev/null && grep -q '<SEC_FLOATING_FEATURE_CAMERA_SUPPORT_AF_DURING_SLOWMOTION_RECORDING>TRUE<' $FF 2>/dev/null ;;
     extstorage) bound $CF && grep -q 'BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_60FPS.*external-storage-support="true"' $CF 2>/dev/null ;;
     anamorphic) bound $CF && grep -q 'name="SUPPORT_CAMERA_ASSISTANT_ANAMORPHIC_LENS" value="true"' $CF 2>/dev/null ;;
-    profps) bound $CF && grep -q 'name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_25FPS" value="true"' $CF 2>/dev/null ;;
-    slowmo4k120) bound $CF && grep -q 'name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_120FPS".*slow_motion' $CF 2>/dev/null ;;
+    profps) bound $CF &&
+      grep -q 'name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_25FPS" value="true"' $CF 2>/dev/null &&
+      grep -q 'name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_120FPS".*slow_motion' $CF 2>/dev/null &&
+      # when the Camera APK is one the patch knows and active, 24 fps needs the patched copy bound
+      # too; an unknown APK (or a Galaxy Store update) leaves the XML rates on and only those two off
+      { set -- $(cam24_row)
+        if [ -n "$1" ] && pm path com.sec.android.app.camera 2>/dev/null | grep -q "^package:$CAM_APK$"; then
+          bound $CAM_APK && grep -q 'name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_24FPS".*supported-mode="[^"]*video' $CF 2>/dev/null
+        else true; fi; } ;;
     autoframe) grep -q "<SEC_FLOATING_FEATURE_CAMERA_CONFIG_AUTOFRAMING>uhd<" $FF 2>/dev/null ;;
     bargein) grep -q "<SEC_FLOATING_FEATURE_BIXBY_CONFIG_BARGEIN_PARAM_MODE>2<" $FF 2>/dev/null ;;
     weather) grep -q "<SEC_FLOATING_FEATURE_$WX_KEY>[^<]*GENWEATHER" $FF 2>/dev/null && pm path $WX_PKG >/dev/null 2>&1 && ! wx_live_off ;;
@@ -2130,7 +2143,6 @@ is_on() {
     hdr2023) bound /system/lib64/libae_bracket_hdr.arcsoft.so && bound /system/lib64/libhybrid_high_dynamic_range.arcsoft.so ;;
     colortone) bound $SETTINGS ;;
     tenbit) bound $TB_LIB && [ "$(md5 $TB_LIB)" = "$(md5 $V/tenbit.so)" ] ;;
-    cam24fps) bound $CAM_APK && bound $CF && grep -q 'name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_24FPS".*supported-mode="[^"]*video' $CF 2>/dev/null ;;
     galaxyai) bound /system/priv-app/SamsungSmartSuggestions/SamsungSmartSuggestions.apk ;;
     hideksu) hideksu_on ;;
     dual5g) [ -f $D5G/applied ] ;;
@@ -2168,14 +2180,16 @@ apply)
   if [ "${S23T_LOCKED:-0}" = 1 ] && [ -d $APPLY_LOCK ]; then echo $$ > $APPLY_LOCK/pid   # handed over by start
   else take_lock || { echo "another apply is already running (see $L)" >&2; exit 3; }; fi
   trap 'rm -rf $APPLY_LOCK' EXIT
-  TWEAKS=" $2 "; : > $L
+  picks=$(migrate_choices "$2")
+  [ "$picks" = "$2" ] || log "choices: cam24fps and slowmo4k120 are part of profps now; applying profps"
+  TWEAKS=" $picks "; : > $L
   log "applying:$TWEAKS"
-  for x in $2; do case " $TWEAK_IDS " in *" $x "*) ;; *) fail "unknown tweak: $x" ;; esac; done
-  echo "$2" > $V/choices
+  for x in $picks; do case " $TWEAK_IDS " in *" $x "*) ;; *) fail "unknown tweak: $x" ;; esac; done
+  echo "$picks" > $V/choices
   has wifi7 && ! has airdrop && fail "wifi7 needs airdrop (the S24 Wi-Fi driver)"
   phone_facts; keep=""
   log "module $(mod_ver) on $model $build ($csc), Android $(getprop ro.build.version.release), kernel $(uname -r)"
-  for x in $2; do
+  for x in $picks; do
     w=$(why_not $x); if [ -n "$w" ]; then log "$x: skipped: $w"; else keep="$keep $x"; fi
   done
   TWEAKS=" $keep "
@@ -2245,12 +2259,10 @@ $CF_ANAMORPHIC
 $CF_ANAMORPHIC_SCALER"
   has profps && cf_add="$cf_add
 $CF_PROFPS"
-  has slowmo4k120 && cf_slowmo_modes="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_120FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_120FPS"
-  has cam24fps && cf_video_modes="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_24FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_24FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_7680X4320_24FPS FRONT_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_24FPS FRONT_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_24FPS"
+  has profps && cf_slowmo_modes="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_120FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_120FPS"
+  has profps && cf_video_modes="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_24FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_24FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_7680X4320_24FPS FRONT_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_24FPS FRONT_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_24FPS"
   camfeat_apply && restart=1
-  if has cam24fps; then cam24fps_bind
-  elif has profps; then cam24fps_bind soft   # only where the APK patch is compatible; one bind either way
-  fi
+  has profps && cam24fps_bind   # XML-only when the Camera APK isn't one the patch knows; the log says what was skipped
   # 4K auto framing (untested): the S24's UHD setting for auto framing in video
   has autoframe && ff_set CAMERA_CONFIG_AUTOFRAMING uhd
   # Camera Assistant: video softening (Off / Medium / High) and the AF speed/sensitivity controls
@@ -2326,7 +2338,7 @@ probe)
   sim=$(getprop gsm.sim.operator.numeric | cut -d, -f1)   # MCC+MNC of the first SIM; 404/405 = India
   printf '{"version":"%s","module":%s,"phone":{"model":"%s","firmware":"%s","csc":"%s","android":"%s","kernel":"%s","gms":%s,"sim":"%s"},' \
     "$ver" "$( [ $MODULE = 1 ] && echo true || echo false)" "$model" "$build" "$csc" "$android" "$kern" "${gms:-0}" "$sim"
-  printf '"picked":"%s","autostart":%s,"applying":%s,"tweaks":[' "$(cat $V/choices 2>/dev/null)" \
+  printf '"picked":"%s","autostart":%s,"applying":%s,"tweaks":[' "$(migrate_choices "$(cat $V/choices 2>/dev/null)")" \
     "$( [ -f $V/autostart ] && echo true || echo false)" "$( lock_alive && echo true || echo false)"
   sep=""; for x in $TWEAK_IDS; do printf '%s%s' "$sep" "$(j $x)"; sep=","; done
   printf ']}\n'
@@ -2350,7 +2362,7 @@ guard)
   reboot
   ;;
 status)
-  echo "saved choices: $(cat $V/choices 2>/dev/null); $(sh $D/tweaks.sh autostart)"
+  echo "saved choices: $(migrate_choices "$(cat $V/choices 2>/dev/null)"); $(sh $D/tweaks.sh autostart)"
   echo "airdrop:  modules [$(grep -oE '^(wonder|bwfix) ' /proc/modules | tr -d '\n')]," \
        "Mosey $(bound /system_ext/bin && echo on || echo off), daemon $(running loop && echo running || echo stopped)," \
        "Mosey service $(service check com.google.android.moseyservice.IMoseyService/default | grep -q ': found' && echo registered || echo "not registered")"
@@ -2368,7 +2380,6 @@ status)
   echo "camerahdr: libraries $([ -f /system/lib64/liblow_light_hdr.arcsoft.so ] && echo on || echo off), list entries $(grep -q 'mfhdr.arcsoft.v4' $FF && echo on || echo off)"
   echo "hdr2023:  $(same_size /system/lib64/libae_bracket_hdr.arcsoft.so $PL/hdr2023/libae_bracket_hdr.arcsoft.so && same_size /system/lib64/libhybrid_high_dynamic_range.arcsoft.so $PL/hdr2023/libhybrid_high_dynamic_range.arcsoft.so && echo "2023 engines" || echo stock)"
   echo "tenbit:   front-camera 10-bit $(is_on tenbit && echo on || echo off)"
-  echo "cam24fps: Camera $(bound $CAM_APK && echo patched || echo stock), 24fps video modes $(is_on cam24fps && echo on || echo off)"
   echo "wideflash: $(is_on wideflash && echo on || echo off)"
   echo "prowbtint: $(is_on prowbtint && echo on || echo off)"
   echo "zoomrocker: $(is_on zoomrocker && echo on || echo off)"
@@ -2378,8 +2389,7 @@ status)
   echo "slowmoaf: $(is_on slowmoaf && echo on || echo off)"
   echo "extstorage: $(is_on extstorage && echo on || echo off)"
   echo "anamorphic: $(is_on anamorphic && echo on || echo off)"
-  echo "profps: $(is_on profps && echo on || echo off), 10x Camera $(cam24_profps_on && echo "APK patched" || echo "XML only")"
-  echo "slowmo4k120: $(is_on slowmo4k120 && echo on || echo off)"
+  echo "profps: $(is_on profps && echo on || echo off), Camera $(bound $CAM_APK && echo patched || echo stock), 10x $(cam24_profps_on && echo "unhidden at 25/48/50 fps" || echo hidden)"
   echo "audioeraser: $([ -f /system/etc/fastScanner.tflite ] && echo on || echo off), engine $(same_size /system/lib64/$VE $PL/audioeraser/$VE && echo S24 || echo stock)"
   echo "colortone: Settings $(bound $SETTINGS && echo patched || echo stock), service $([ -f /system/priv-app/$EAD/$EAD.apk ] && echo on || echo off)"
   echo "galaxyai: $(for p in $GAI_APPS; do n=${p#*/}; printf '%s=%s ' $n "$(same_size /system/$p/$n.apk $PL/galaxyai/$n.apk && echo S24 || echo stock)"; done)C2PA=$(same_size $C2PA $D/files/libC2paDps-shim.so && echo shim || echo stock)"
@@ -2569,7 +2579,7 @@ boot)
   blog() { echo "$(date '+%F %T') $*" >> $B; }
   note() { cmd notification post -S bigtext -t "S23 tweaks" s23tweaks "$1" >/dev/null 2>&1; }
   [ -f $V/autostart ] || exit 0
-  t=$(cat $V/choices 2>/dev/null); [ -n "$t" ] || exit 0
+  t=$(migrate_choices "$(cat $V/choices 2>/dev/null)"); [ -n "$t" ] || exit 0
   # KernelSU can run boot scripts more than once per boot (seen with DFRoot's late load): only the
   # first call goes on
   mkdir /dev/s23tweaks_boot.lock 2>/dev/null || exit 0

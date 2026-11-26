@@ -368,7 +368,6 @@ const TWEAKS = [
   { id: "hdr2023", cat: "camera", name: "2023 ArcSoft HDR", desc: "The One UI 6 (2023) hybrid and bracketed HDR engines instead of today's. Ticking Camera leaves it out; pick it yourself (28 MB download)" },
   { id: "autoframe", cat: "camera", name: "4K auto framing", desc: "The S24's UHD setting for auto framing in video. Reported to make the camera fail on an S918B, so ticking Camera leaves it out" },
   { id: "tenbit", cat: "camera", name: "Front-camera 10-bit for apps", desc: "Any app (Camera2) can record 10-bit HDR (HLG10) video with the selfie cameras, as with the rear ones. Patches a copy of the phone's own camera driver; the first apply takes about 15 s longer" },
-  { id: "cam24fps", cat: "camera", name: "24 FPS in standard Video", desc: "Adds 24 fps to FHD (1080p), UHD (4K) and 8K in the standard Video picker, on the rear and front cameras (patches a copy of Samsung Camera; no extra framework needed)" },
   { id: "wideflash", cat: "camera", name: "Flash on 0.6× ultrawide", desc: "Unlocks flash in Photo and torch in Video on the 0.6× ultrawide lens, plus its Camera Assistant toggle." },
   { id: "prowbtint", cat: "camera", name: "White-balance tint in Pro", desc: "The Tint slider next to the colour temperature in Pro and Pro video's white balance" },
   { id: "zoomrocker", cat: "camera", name: "Video zoom rocker", desc: "The smooth zoom rocker/slider in the standard Video mode" },
@@ -378,8 +377,7 @@ const TWEAKS = [
   { id: "slowmoaf", cat: "camera", name: "Touch focus in Slow motion", desc: "Tap the viewfinder to focus while recording a Slow motion video" },
   { id: "extstorage", cat: "camera", name: "Record to USB-C storage", desc: "Records straight to a USB-C SSD or drive in every video mode (4K60, 4K60 21:9, 8K, FHD120)" },
   { id: "anamorphic", cat: "camera", name: "Anamorphic desqueeze", desc: "Camera Assistant's anamorphic lens desqueeze (1.33× / 1.55× / 2.0×) for anamorphic lenses" },
-  { id: "profps", cat: "camera", name: "Extra Pro video frame rates", desc: "4K 25/48/50/100/120 (120 on the Wide and Ultrawide), FHD 25/48/50/100 and 8K 25 in Pro video, plus 21:9 Cinema 25/48/50/100/120; on a patched Samsung Camera (S918BXXUAGZIF) it also unhides the 10× super tele at 25/48/50 fps" },
-  { id: "slowmo4k120", cat: "camera", name: "4K120 in Slow motion", desc: "Adds 4K120 and FHD120 to Slow motion, and rebuilds the FHD240 entry so the Slow motion resolution list is complete (Log works with the Log video tweak on)" },
+  { id: "profps", cat: "camera", name: "Frame-rate unlocks", desc: "24 fps in standard Video (FHD, UHD and 8K, rear and front); Pro video 4K/21:9 25/48/50/100/120, FHD 25/48/50/100 and 8K 25, with the 10× super tele unhidden at 25/48/50 on the patched Camera; and Slow motion 4K120/FHD120 with the FHD240 entry rebuilt. The Pro rates and Slow motion are XML-only; 24 fps and the 10× need a stock Samsung Camera the patch knows, so with a Galaxy Store update or an unknown Camera those two are skipped and the rest still applies." },
   { id: "display", cat: "display", name: "Full-screen AOD", desc: "The lock screen wallpaper on Always On Display, and AOD brightness that follows the room light" },
   { id: "colortone", cat: "display", name: "Adaptive color tone", desc: "Display colour follows the room light, as on the S24 (1 MB download)" },
   { id: "vulkan", cat: "display", name: "Vulkan rendering", desc: "Apps draw with Vulkan instead of OpenGL, as on the S24. Can make some lock screen animations (stretchable clocks) stutter more; unpick it if so." },
@@ -403,8 +401,8 @@ const TWEAKS = [
 // independent in tweaks.sh and in the saved picks; the page only groups them.
 const BUNDLES = [
   { id: "cameratweaks", cat: "camera", name: "Camera Tweaks",
-    ids: ["cam24fps", "wideflash", "prowbtint", "zoomrocker", "videosoftening", "afcontrol", "aelimit", "slowmoaf", "extstorage", "anamorphic", "profps", "slowmo4k120"],
-    desc: "Everything we added to the camera, in one switch: 24 FPS in Video (rear and front), flash and torch on the 0.6× ultrawide, white-balance tint, Video zoom rocker, 4K120 in Slow motion, Camera Assistant's video softening, AF speed/sensitivity, auto exposure limit and anamorphic desqueeze, touch focus in Slow motion, USB-C recording and the extra Pro video rates (4K 120, 21:9 Cinema, up to 8K 25, and the 10× at 25/48/50 on the patched Camera)." },
+    ids: ["wideflash", "prowbtint", "zoomrocker", "videosoftening", "afcontrol", "aelimit", "slowmoaf", "extstorage", "anamorphic", "profps"],
+    desc: "Everything we added to the camera, in one switch: frame-rate unlocks (24 FPS in standard Video on rear and front, the extra Pro video rates with the 10× at 25/48/50 on the patched Camera, and 4K120/FHD120 in Slow motion with the FHD240 entry rebuilt), flash and torch on the 0.6× ultrawide, white-balance tint, Video zoom rocker, Camera Assistant's video softening, AF speed/sensitivity, auto exposure limit and anamorphic desqueeze, touch focus in Slow motion and USB-C recording." },
 ];
 const BUNDLE_OF = {};
 for (const b of BUNDLES) for (const id of b.ids) BUNDLE_OF[id] = b;
@@ -440,7 +438,7 @@ const WHERE = {
   camextras: ["Director's view", "Camera → More → Director's view. Horizon lock: Video → Super steady → Horizontal lock; it levels tilts up to about 20° on the 0.6× camera, not a full turn."],
   hdr2023: ["2023 ArcSoft HDR", "Nothing to set. Bracketed HDR (backlit scenes) is tested; hybrid HDR (ordinary daylight) loads but is untested. If photos look wrong, turn it off."],
   tenbit: ["Front-camera 10-bit", "Nothing to set. Apps that offer 10-bit or HDR video (HLG) now offer it on the selfie camera too; Samsung Camera already had its own."],
-  cam24fps: ["24 FPS in standard Video", "Camera → Video → tap resolution/FPS at the top → select FHD, UHD or 8K and 24."],
+  profps: ["Frame-rate unlocks", "Camera → Video → resolution/FPS: 24 fps on FHD, UHD and 8K (rear and front). Pro video: 4K/21:9 25/48/50/100/120, FHD 25/48/50/100, 8K 25 and the 10× at 25/48/50 on the patched Camera. Slow motion: 4K120 and FHD120, with the FHD240 menu entry rebuilt."],
   wideflash: ["Flash on ultrawide", "Camera → Photo: flash on; Video: torch on. Camera Assistant now shows the ultrawide flash option."],
   cameratweaks: ["Camera Tweaks", "24 fps: Camera → Video → resolution/FPS. Ultrawide flash: Photo flash / Video torch. Tint: Pro or Pro video → white balance. Zoom rocker: Video zoom. 4K120: Slow motion → 4K120 (Log needs the Log video tweak). Camera Assistant: video softening, AF speed/sensitivity, auto exposure limit and anamorphic desqueeze. Touch focus: Slow motion. USB-C: Camera → Settings → Storage. Pro rates: Camera → More → Pro video."],
   videosoftening: ["Video softening", "Camera → Settings → Camera Assistant → Video softening (Off / Medium / High)."],
@@ -661,7 +659,7 @@ function initialSelection(p) {
   ids = ids.filter(available);
   const s = new Set(ids);
   // a bundle is all-or-nothing: an old saved pick with any member gets the whole bundle
-  // (so a newly added tweak such as slowmo4k120 is not left out after a module update)
+  // (so a newly added tweak is not left out after a module update)
   for (const b of BUNDLES) if (b.ids.some(i => s.has(i))) for (const i of b.ids) if (available(i)) s.add(i);
   if (s.has("wifi7")) { if (available("airdrop")) s.add("airdrop"); else s.delete("wifi7"); }
   if (s.has("india")) s.delete("callrec");
@@ -1152,7 +1150,6 @@ function installMock() {
     if (has("colortone")) add(0.6, "colortone: Adaptive color tone on (Settings > Display)");
     if (has("galaxyai")) add(0.4, "galaxyai: S24 Now Brief (Personal Data Intelligence), Creative Studio and Call Assist on");
     if (has("tenbit")) add(1.2, "tenbit: front cameras offer 10-bit HDR (HLG10) video to apps");
-    if (has("cam24fps")) add(0.4, "cam24fps: 24 FPS in standard Video on (Camera > Video > UHD 24)");
     if (has("wideflash")) add(0.2, "wideflash: flash in Photo and torch in Video on the 0.6× ultrawide");
     if (has("prowbtint")) add(0.2, "prowbtint: white-balance Tint slider on (Pro and Pro video)");
     if (has("zoomrocker")) add(0.2, "zoomrocker: Video zoom rocker on");
@@ -1162,11 +1159,10 @@ function installMock() {
     if (has("slowmoaf")) add(0.3, "slowmoaf: touch focus while recording Slow motion on");
     if (has("extstorage")) add(0.2, "extstorage: USB-C storage enabled in every video resolution");
     if (has("anamorphic")) add(0.3, "anamorphic: Camera Assistant > anamorphic lens desqueeze on");
-    if (has("profps")) add(0.3, "profps: extra Pro video frame rates on (4K 25/48/50, FHD 25/48/50/100, 8K 25)");
-    if (has("slowmo4k120")) add(0.3, "slowmo4k120: 4K120 and FHD120 in Slow motion on, FHD240 menu entry rebuilt");
+    if (has("profps")) add(0.4, "profps: 24 fps in standard Video, extra Pro video rates and 4K120/FHD120 Slow motion on (FHD240 menu entry rebuilt)");
     if (has("vulkan")) add(0.3, "vulkan: apps render with Skia on Vulkan");
     if (has("weather")) add(0.3, "feature flags on: LOCKSCREEN_CONFIG_WALLPAPER_STYLE");
-    if (["airdrop", "battery", "features", "callrec", "india", "display", "logvideo", "vulkan", "camerahdr", "hdr2023", "audioeraser", "colortone", "galaxyai", "weather", "wideflash", "prowbtint", "zoomrocker", "videosoftening", "afcontrol", "aelimit", "slowmoaf", "extstorage", "anamorphic", "profps", "slowmo4k120"].some(has)) { add(0.4, "restarting the Android framework (screen goes black for ~30 s)"); add(3.0, "framework back"); }
+    if (["airdrop", "battery", "features", "callrec", "india", "display", "logvideo", "vulkan", "camerahdr", "hdr2023", "audioeraser", "colortone", "galaxyai", "weather", "wideflash", "prowbtint", "zoomrocker", "videosoftening", "afcontrol", "aelimit", "slowmoaf", "extstorage", "anamorphic", "profps"].some(has)) { add(0.4, "restarting the Android framework (screen goes black for ~30 s)"); add(3.0, "framework back"); }
     if (has("hotspot6g")) add(0.5, "hotspot6g: Mobile hotspot > Band now offers 6 GHz (needs WPA3); country unchanged, Samsung Wallet unaffected");
     if (has("weather")) add(0.6, "weather: on; pick it in the lock screen editor (Wallpaper and style > Lock screen > Weather)");
     if (has("airdrop")) { add(0.4, "airdrop: mosey_server running"); add(0.4, "airdrop: Play services Nearby flags on (2 of 2 overrides present)"); }
@@ -1199,7 +1195,7 @@ function installMock() {
     return JSON.stringify({ version: "v1.1.0", module: true,
       phone: { model: "SM-S918W", firmware: "S918WVLU8GZIF", csc: "XAC", android: "17", kernel: "5.15.197-android13-8-34343818-abS918WVLU8GZIF", gms: 264531035, sim: new URLSearchParams(location.search).get("sim") || "40445" },
       picked: st.picked, autostart: st.autostart, applying: !!st.run,
-      tweaks: [tw("airdrop"), tw("battery"), tw("features"), tw("callrec"), tw("india"), tw("hotspot6g"), tw("wifi7", w7 ? "" : "needs firmware S918WVLU8GZIF (this phone runs S918WVLU7GZE1)"), tw("display"), tw("logvideo"), tw("vulkan"), tw("camerahdr"), tw("hdr2023"), tw("audioeraser"), tw("colortone"), tw("galaxyai"), tw("camextras"), tw("autoframe"), tw("settingssearch"), tw("bargein"), tw("tenbit"), tw("cam24fps"), tw("weather"), tw("wideflash"), tw("prowbtint"), tw("zoomrocker"), tw("videosoftening"), tw("afcontrol"), tw("aelimit"), tw("slowmoaf"), tw("extstorage"), tw("anamorphic"), tw("profps"), tw("slowmo4k120"), tw("callscreen", "needs the Language Core 4.0.01.24 APK (3.1 GB) in /data/adb/s23tweaks/dl/languagecore-4.0.01.24.apk; see the README"), tw("dual5g"), tw("nronly"), tw("natroam"), tw("rambler")] });
+      tweaks: [tw("airdrop"), tw("battery"), tw("features"), tw("callrec"), tw("india"), tw("hotspot6g"), tw("wifi7", w7 ? "" : "needs firmware S918WVLU8GZIF (this phone runs S918WVLU7GZE1)"), tw("display"), tw("logvideo"), tw("vulkan"), tw("camerahdr"), tw("hdr2023"), tw("audioeraser"), tw("colortone"), tw("galaxyai"), tw("camextras"), tw("autoframe"), tw("settingssearch"), tw("bargein"), tw("tenbit"), tw("weather"), tw("wideflash"), tw("prowbtint"), tw("zoomrocker"), tw("videosoftening"), tw("afcontrol"), tw("aelimit"), tw("slowmoaf"), tw("extstorage"), tw("anamorphic"), tw("profps"), tw("callscreen", "needs the Language Core 4.0.01.24 APK (3.1 GB) in /data/adb/s23tweaks/dl/languagecore-4.0.01.24.apk; see the README"), tw("dual5g"), tw("nronly"), tw("natroam"), tw("rambler")] });
   }
   function handle(cmd) {
     tick();
