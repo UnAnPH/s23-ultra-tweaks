@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.8.13
 
 - **Fix: Brave (and other user-installed Chromium browsers) quit at launch with `hideksu` on** (#52). `hidemnt` hid the module's mounts from the browser's GPU process too, and with both the `/system/lib64` and `/vendor/lib64` overlays gone from its view the Adreno driver refuses an OpenGL ES 3.0 context (`eglCreateContext: Requested version is not supported`); Chromium then gives up with "GPU process isn't usable. Goodbye." Either overlay alone is fine. It now keeps the mounts in Chromium's GPU process (`<package>:privileged_processN`), which runs Chromium's own code and no root check; the app's own processes are still hidden from. Chrome was never affected because it is a system app.
 
