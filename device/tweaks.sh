@@ -200,6 +200,14 @@ scrub() {
     -e 's/((device|account|profile|owner|user)[Nn]ame=|[(, ]name=)[^,)]+/\1<name>/g' -e 's/(account=)[^,)]+/\1<account>/g' |
     if [ -n "$sn" ]; then sed "s/$sn/<serial>/g"; else cat; fi
 }
+# Nearby flags in Play services' live config (the snapshot Nearby reads), not just in its database:
+# an override can sit in the database and still be missing here, which leaves Mosey unused
+nearby_live() {
+  f=/data/data/com.google.android.gms/files/phenotype/shared/com.google.android.gms.nearby.pb
+  [ -f $f ] || { echo "no Nearby config file yet"; return; }
+  c=0; t=0; for x in $NEARBY_FLAGS; do t=$((t + 1)); grep -qF "$x" $f && c=$((c + 1)); done
+  echo "$c of $t in Play services' live Nearby config$([ $c -lt $t ] && echo "; apply again to put them back")"
+}
 AD_SUM=$V/airdrop-test.summary   # the last airdrop-test's verdict, shown in the report
 # what logcat holds: a busy phone fills the main buffer in minutes, so a missing line may just be old
 log_span() { f=$(logcat -d -b main -v epoch 2>/dev/null | awk 'NF > 2 && $1 ~ /^[0-9]+\./ { print int($1); exit }')
@@ -374,6 +382,14 @@ wifi7_check() {
   was_off=${WIFI_WAS_OFF:-0}
   wifi_off && cmd wifi set-wifi-enabled enabled
   wait_for 60 wlan_up; [ $was_off = 1 ] || wait_for 90 connected
+  # The S24 supplicant only runs once the supplicant restarts. A driver reload does that, but when the
+  # driver already has the MLO settings (an earlier apply this boot fell back to the S23 supplicant and
+  # kept them) nothing restarts it, so cycle Wi-Fi once before deciding it failed.
+  if bound $WPAS && [ "$(md5 /proc/$(pidof wpa_supplicant)/exe 2>/dev/null)" != "$(md5 $AIR/wifi7/wpa_supplicant)" ]; then
+    log "wifi7: restarting Wi-Fi so the S24 supplicant takes over (Wi-Fi drops for a few seconds)"
+    cmd wifi set-wifi-enabled disabled; wait_for 15 wifi_off; wait_for 20 sup_stopped
+    cmd wifi set-wifi-enabled enabled; wait_for 60 wlan_up; [ $was_off = 1 ] || wait_for 90 connected
+  fi
   if [ "$(getprop init.svc.wpa_supplicant)" = running ] && cmd wifi status | grep -q "Wifi is enabled" &&
      [ "$(md5 /proc/$(pidof wpa_supplicant)/exe)" = "$(md5 $AIR/wifi7/wpa_supplicant)" ]; then
     log "wifi7: Wi-Fi running with the S24 supplicant ($(cmd wifi status | grep -oE 'Wi-Fi standard: [^,]*' | head -1))"
@@ -2621,6 +2637,7 @@ airdrop-test)
       "hotspot $(cmd wifi status 2>/dev/null | grep -qiE 'SoftApManager|ROLE_SOFTAP' && echo on || echo off)," \
       "Bluetooth $([ "$(settings get global bluetooth_on)" = 1 ] && echo on || echo off)," \
       "AirDrop modules [$(grep -oE '^(wonder|bwfix) ' /proc/modules | tr -d '\n')]"
+    echo "  Nearby flags: $(nearby_live)"
     echo "  network interfaces: $(ip -o link 2>/dev/null | awk -F': ' '{ sub(/@.*/, "", $2); print $2 }' | grep -vE '^(lo|dummy|ifb|tunl|gre|erspan|ip_vti|ip6|sit|rmnet|epdg)' | tr '\n' ' ')"
   }
   # the kernel log's last record number now: lines after it are the test's (its clock stops in deep sleep,
@@ -2646,17 +2663,21 @@ airdrop-test)
   nmo=$((napp + nst))   # the app is what runs a share; mosey_server alone logs housekeeping too
   nst=$(grep -cE 'am_proc_start.*com\.google\.android\.mosey[],]' $raw)
   nk=$(grep -ciE 'wonder|awdl|llw' $kr)
+  # Play services loading Mosey as a share target: its external provider registry, then the bind
+  nreg=$(grep -cE 'NearbySharing: (Starting external provider registry|Bound to provider ComponentInfo\{com\.google\.android\.mosey)' $raw)
   nohand="the share never reached the AirDrop side (Share with Apple devices not shown or not tapped, or Play services didn't hand the share to Mosey)"
   if [ $nmo -gt 0 ]; then
     if [ $nk -gt 0 ]; then v="Mosey ran and the Wi-Fi driver logged AirDrop link activity: the log shows how far it got"
     else v="Mosey ran; the kernel log has no AirDrop link lines: the log shows how far Mosey got"; fi
+  elif [ $nui -gt 0 ] && [ $nreg = 0 ]; then
+    v="Quick Share opened, but Play services never loaded Mosey (no external provider registry): its Nearby flags aren't in effect. Apply again (it rewrites them and restarts Play services), then retry"
   elif [ $nui -gt 0 ]; then
     if [ $nsrv -gt 0 ]; then v="Quick Share opened, but the Mosey app never started (only mosey_server logged, $nsrv lines): $nohand"
     else v="Quick Share opened, but Mosey logged nothing: $nohand"; fi
   elif [ $nsl -gt 0 ]; then v="Mosey logged nothing. Quick Share logged $nsl lines but no screen of it opened; if you did share, $nohand"
   else v="Neither Quick Share nor Mosey logged anything: start the test, then share within $secs s"; fi
   { echo "$(date '+%Y-%m-%d %H:%M'), $secs s: $v"
-    echo "  Quick Share screens opened $nui, Quick Share lines $nsl, Mosey app lines $napp, mosey_server lines $nsrv (its idle restarts not counted), Mosey app starts $nst, AirDrop link kernel lines $nk"
+    echo "  Quick Share screens opened $nui, Quick Share lines $nsl, Mosey app lines $napp, mosey_server lines $nsrv (its idle restarts not counted), Mosey app starts $nst, Play services loading Mosey $nreg, AirDrop link kernel lines $nk"
     echo "  before:"; echo "$before" | sed 's/^/  /'; echo "  after:"; echo "$after" | sed 's/^/  /'
     echo "  log: $out"; } | scrub > $AD_SUM
   { echo "s23-ultra-tweaks AirDrop test, $(date '+%Y-%m-%d %H:%M:%S %z'), module $(mod_ver), $(getprop ro.product.model) $(getprop ro.build.PDA)"
@@ -2712,6 +2733,7 @@ report)
     klog | grep -iE 'wonder|bwfix|mhifix|s23tweaks|kiwi_v2.*(error|fail|assert|crash)|cnss.*(fail|error|crash|assert|ssr|recover)|wlan.*firmware' |
       grep -vE 'Runtime (suspend|resume)|PCI link|MHI state' | tail -n 25 | sed 's/^/  /' | cut -c1-200
     echo "Mosey app: $(pidof com.google.android.mosey >/dev/null && echo running || echo "not running (it starts when Quick Share hands it a share)"); the logs below cover the last $(log_span), so an older start or share isn't in them"
+    echo "Nearby flags: $(nearby_live)"
     if [ -f $AD_SUM ]; then echo "last AirDrop test (tweaks.sh airdrop-test):"; sed 's/^/  /' $AD_SUM
     else echo "no AirDrop test recorded yet: Status > Record an AirDrop test, then try a share while it records"; fi
     echo "Mosey / Quick Share warnings and errors, last 30 (names in quotes masked):"

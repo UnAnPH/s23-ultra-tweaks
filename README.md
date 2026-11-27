@@ -6,6 +6,8 @@ The tweaks come in six categories. The module page lets you pick a whole categor
 Each one works on any S23 Ultra on One UI 9 unless it says otherwise.
 
 **What's new** (details in the [changelog](CHANGELOG.md)):
+- **v1.8.8**: the AirDrop test recognises when Play services never loaded Mosey (the cause in issues #22 and #39) and says to apply again; the test and the report show how many Nearby flags are in Play services' live config.
+- **v1.8.7**: `wifi7` no longer gives up when an earlier apply in the same boot had fallen back to the S23 supplicant; it restarts Wi-Fi once so the S24 supplicant takes over.
 - **v1.8.6**: new **Notification highlights** tweak (Galaxy AI sorts important notifications to the top; summaries stay empty on the S23, which has no model for them); `wifi7` no longer turns itself off when you apply with Wi-Fi switched off; the status says when `hideksu`'s hiding daemon has stopped; colortone and highlights stack correctly; `dual5g` sees the modem come back after its restart; reports mask Quick Share names; installer and module page fixes (Language Core 5.x, Indian SIMs on MCC 406).
 - **v1.8.5**: Status → **Record an AirDrop test** records one share attempt and says which stage it reached; the module refuses to apply after being removed earlier in the same boot (that left the camera crashing), and the bug report's kernel log works from the module page.
 - **v1.8.4**: `hideksu` keeps hiding the module's mounts from apps after hours of use (the `hidemnt` daemon no longer exits when bursts of app starts overflow its event queue).
