@@ -187,12 +187,21 @@ wait_for() { n=$1; shift; while [ $n -gt 0 ]; do "$@" && return 0; n=$((n-1)); s
 mounted() { mount | grep -q " $1 type $2"; }
 bound() { mount | grep -q " $1 "; }
 running() { ps -A -o ARGS | grep -q "[t]weaks.sh $1"; }
-# The recorder keeps the recent Android log (Info and up, about 8 MB: an hour or more on most phones) and
-# the kernel's Wi-Fi/AirDrop lines in $REC, so a report made after something went wrong already holds
-# what happened: no timed test needed. Root-only files; the report takes filtered, masked lines from them.
+# The recorder keeps the recent Android log (Info and up, 8 files of 4 MB) and the kernel's Wi-Fi/AirDrop
+# lines in $REC, so a report made after something went wrong already holds what happened: no timed test
+# needed. Root-only files; the report takes filtered, masked lines from them. A busy phone logs ~450 KB a
+# minute at Info; the five UI tags silenced in REC_QUIET are a quarter of that, so 32 MB keeps 1.5 h or so.
 REC=$V/rec
-rec_start() { running recorder || setsid sh $D/tweaks.sh recorder </dev/null >/dev/null 2>&1 & }
-rec_files() { for f in $REC/log.3 $REC/log.2 $REC/log.1 $REC/log; do [ -f $f ] && echo $f; done; }
+REC_CONF="4096 7"
+REC_QUIET="View:S SurfaceFlinger:S NotifHistoryProto:S FASModelGlobal:S power_partial_wake_state:S"
+rec_start() {
+  # a recorder from an older version keeps its old size until stopped; restart it with the current one
+  if running recorder && [ "$(cat $REC/conf 2>/dev/null)" != "$REC_CONF" ]; then
+    pkill -f "tweaks.sh recorder"; pkill -f "logcat .*-f $REC/log"; pkill -f "dmesg -W"; sleep 1
+  fi
+  running recorder || setsid sh $D/tweaks.sh recorder </dev/null >/dev/null 2>&1 &
+}
+rec_files() { for i in 7 6 5 4 3 2 1; do [ -f $REC/log.$i ] && echo $REC/log.$i; done; [ -f $REC/log ] && echo $REC/log; }
 has() { case " $TWEAKS " in *" $1 "*) return 0 ;; esac; return 1; }
 # cam24fps and slowmo4k120 were folded into profps (they share the same Camera APK patch and
 # camera-feature.xml edit). A saved picks list from an older module may still name them: map both
@@ -2609,8 +2618,8 @@ loop)
 recorder)
   # logcat rotates its own files (-r KB, -n count). It's restarted if it ever ends; -T 1 then starts at
   # the newest line instead of copying the whole buffer in again.
-  mkdir -p $REC; chmod 700 $REC; t=""
-  ( while true; do logcat -b main,system,events,crash -v threadtime $t -f $REC/log -r 2048 -n 3 '*:I' 2>/dev/null; t="-T 1"; sleep 10; done ) &
+  mkdir -p $REC; chmod 700 $REC; t=""; echo "$REC_CONF" > $REC/conf; set -- $REC_CONF
+  ( while true; do logcat -b main,system,events,crash -v threadtime $t -f $REC/log -r $1 -n $2 '*:I' $REC_QUIET 2>/dev/null; t="-T 1"; sleep 10; done ) &
   # dmesg -W waits for new kernel lines (no polling); only Wi-Fi/AirDrop ones are kept, trimmed to ~1 MB
   while true; do
     dmesg -W 2>/dev/null | grep --line-buffered -iE 'wonder|awdl|llw|wlan|cnss|firmware|mosey' |

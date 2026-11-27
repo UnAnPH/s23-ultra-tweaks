@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Fix: the bug report's recorded log covered only 15–20 minutes on a busy phone, not the hour or more v1.8.9 promised.** At Info level a phone in use logs about 450 KB a minute (measured: 23 MB in 51 minutes), and the recorder kept 8 MB. A framework restart floods the log, so an apply could push out almost everything: one report after an apply held just 2 minutes. The recorder now keeps 8 files of 4 MB (32 MB) and leaves out five chatty display and power tags (`View`, `SurfaceFlinger`, `NotifHistoryProto`, `FASModelGlobal`, `power_partial_wake_state`: about a quarter of the volume, none of it used by the report). That holds about an hour and a half. A recorder still running with v1.8.9's settings restarts with the new ones on the next apply.
+
 ## v1.8.9
 
 - **The bug report now holds the last hour or more of logs, so a failure can be reported after the fact.** Until now, the report's logs covered only the last few minutes, so users had to follow timed steps: start a recording, then share within 90 seconds, or make the report right away. The module now runs a recorder from boot (and from every apply). It keeps Android's log at Info level and up, in rotating files of about 8 MB in `/data/adb/s23tweaks/rec`, plus the kernel's Wi-Fi and AirDrop lines (about 1 MB). The report adds a "recorded log" section:
