@@ -8,7 +8,7 @@ set -euo pipefail
 # below can read the rest of the script from stdin (curl | bash).
 main() {
 REPO=dtechterminal/s23-ultra-tweaks
-VERSION=v1.8.8
+VERSION=v1.8.11
 AIRDROP_KBASE=5.15.197-android13-8-34343818-ab; AIRDROP_FW="S918WVLU8GZIF S918BXXUAGZIF S918U1UEU8GZIF S918USQU8GZIF S918NKSU8GZIF S9180ZHU8GZIF"   # as in device/tweaks.sh
 PHONE_DIR=/data/adb/s23tweaks          # state (and the code, when the module isn't installed)
 MODULE_DIR=/data/adb/modules/s23_ultra_tweaks
@@ -68,7 +68,7 @@ HKS_MD5="30d17f5d60b0d42585b97a94412f6e12 f4c5966939637df194bb465478234fc3 7dc62
 jar_md5=$(sh_ md5sum /system/framework/services.jar 2>/dev/null | cut -d' ' -f1)
 can_ksu=0; why_ksu="this phone's services.jar isn't one a patch was made from (S918W S918WVLU8GZIF, S918B INS/EUX, S918U1)"
 case " $HKS_MD5 " in *" ${jar_md5:-none} "*) can_ksu=1; why_ksu="" ;; esac
-# an Indian SIM (MCC 404/405) makes the carrier picks take the India config instead of plain call recording
+# an Indian SIM (MCC 404/405/406) makes the carrier picks take the India config instead of plain call recording
 sim=$(sh_ getprop gsm.sim.operator.numeric | cut -d, -f1); sim_india=0; carrier_skip=india
 case "$sim" in 404*|405*|406*) sim_india=1; carrier_skip=callrec ;; esac
 
@@ -80,13 +80,13 @@ lc_have=$(sh_ "dumpsys package com.samsung.android.offline.languagemodel 2>/dev/
 
 # Tweaks, grouped in categories. A category letter picks every available tweak in it.
 ids=(airdrop wifi7 hotspot6g
-     logvideo camextras camerahdr hdr2023 autoframe tenbit wideflash prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage anamorphic profps
+     logvideo camextras camerahdr hdr2023 autoframe tenbit wideflash prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage anamorphic profps uhd60lenses
      display colortone vulkan weather
      galaxyai highlights audioeraser settingssearch callscreen bargein
-     battery features hideksu
+     battery features hideksu wearretry
      callrec india dual5g nronly natroam
      rambler)
-cat=(A A A B B B B B B B B B B B B B B B B C C C C D D D D D D E E E F F F F F D)
+cat=(A A A B B B B B B B B B B B B B B B B B C C C C D D D D D D E E E E F F F F F D)
 cats=(A B C D E F)
 catname=("Connectivity" "Camera" "Display and graphics" "Galaxy AI and Samsung apps" "Battery and settings" "Carrier")
 desc=("AirDrop: Quick Share > Share with Apple devices (S24 Wi-Fi driver + Google's Mosey; 20 MB download)"
@@ -108,6 +108,7 @@ desc=("AirDrop: Quick Share > Share with Apple devices (S24 Wi-Fi driver + Googl
       "Record to USB-C storage: record straight to a USB-C SSD or drive in every video mode"
       "Anamorphic desqueeze: Camera Assistant's 1.33x / 1.55x / 2.0x anamorphic lens desqueeze"
       "Frame-rate unlocks: 24 fps in standard Video (FHD, UHD and 8K, rear and front); Pro video 4K/21:9 25/48/50/100/120, FHD 25/48/50/100, 8K 25 and the 10x super tele at 25/48/50; and Slow motion 4K120/FHD120 with the FHD240 menu entry rebuilt (24 fps and the 10x need a stock Samsung Camera the patch knows; the other rates are XML-only and work anywhere)"
+      "4K60 on all lenses in Video: keeps the 0.6x, 1x, 3x and 10x lens buttons available at UHD 60 fps instead of a remosaic crop (experimental: no stabilization at 3x/10x, can freeze while zooming)"
       "Always On Display: lock screen wallpaper, and AOD brightness that follows the room light"
       "Adaptive color tone: Settings > Display, the screen's colour follows the room light (1 MB download)"
       "Vulkan rendering: apps draw with Vulkan instead of OpenGL"
@@ -116,19 +117,20 @@ desc=("AirDrop: Quick Share > Share with Apple devices (S24 Wi-Fi driver + Googl
       "Notification highlights: Galaxy AI sorts important notifications to the top of the panel and summarizes long or repeated chats, on the phone; needs a Samsung account, and summaries appear with the screen off"
       "Audio Eraser: remove wind, noise, music or voices from videos in Gallery (34 MB download)"
       "Settings search: the S24's new Settings search bar; natural-language answers stay off (10 MB download)"
-      "Call screening: installs Samsung Language Core; screening and voice messages work, the AI summary doesn't (persistent; 3.1 GB download)"
+      "Call screening: installs Samsung Language Core; screening, greeting, voice messages and the AI summary work; AI replies untested (persistent; 3.1 GB download)"
       "Bixby barge-in: talk over Bixby while it answers (untested)"
       "Battery health page: Settings > Battery > Battery information shows health and cycles"
       "Extra settings: louder VoIP calls (and Auto power on/off on Chinese models)"
       "HideKSU: hide the KernelSU root manager from apps, so root-aware apps like CRED stop crashing (patched services.jar; 12 MB download; needs the KernelSU manager installed)"
+      "Watch battery fix: Play services stops retrying a Galaxy Watch every few seconds while it's away or not answering (needs the AirDrop download; untested)"
       "Call recording in the Samsung Phone app"
       "India carrier config for Airtel/Jio SIMs: 'Use 5G standalone networks' switch, call recording, Smart IVR, message cards, plus Samsung Wallet India (UPI, DigiLocker, transit) and the 6 GHz hotspot by reporting the phone as the Indian model; reverts on reboot, the sales code on disk is untouched"
       "Dual SIM 5G: 5G standalone on both SIMs at once instead of only the data SIM (adds your SIMs' country to the modem's 5G+5G list; stays until un-picked; the original is backed up first)"
       "Network mode: 'LTE only' and '5G only' for both SIMs (Settings > Connections > Mobile networks > Network mode; 5G only means standalone 5G, with no signal where there is none)"
       "India: no 'R' roaming icon on national roaming (an Airtel or Jio SIM from another circle counts as home; roaming abroad still shows)"
       "Gboard Rambler: the Pixel 10/11's Gemini voice typing that drops filler words and takes spoken edits (Gboard settings > Voice typing > Dictation type > Rambler)")
-avail=($can_airdrop $can_airdrop 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 $can_ct 1 1 1 1 1 1 $can_lc 1 1 1 $can_ksu $can_rec $can_csc 1 1 1 1)
-why=("$why_airdrop" "$why_airdrop" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "$why_ct" "" "" "" "" "" "" "$why_lc" "" "" "" "$why_ksu" "$why_rec" "$why_csc" "" "" "" "")
+avail=($can_airdrop $can_airdrop 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 $can_ct 1 1 1 1 1 1 $can_lc 1 1 1 $can_ksu 1 $can_rec $can_csc 1 1 1 1)
+why=("$why_airdrop" "$why_airdrop" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "$why_ct" "" "" "" "" "" "" "$why_lc" "" "" "" "$why_ksu" "" "$why_rec" "$why_csc" "" "" "" "")
 
 # pre-release builds lived in /data/local/tmp/s23tweaks: carry the picks and the Play services backup over
 sh_ "su -c '[ -d /data/local/tmp/s23tweaks ] && [ ! -e $PHONE_DIR/choices ] && mkdir -p $PHONE_DIR && cp -r /data/local/tmp/s23tweaks/choices /data/local/tmp/s23tweaks/backup $PHONE_DIR/ 2>/dev/null; true'" >/dev/null
@@ -266,8 +268,9 @@ case " $picked " in *" slowmoaf "*) info "Focus in Slow motion: Camera > Slow mo
 case " $picked " in *" extstorage "*) info "USB-C storage: plug an exFAT USB-C SSD/drive; Camera > Settings > Storage > USB storage, then record in any mode." ;; esac
 case " $picked " in *" anamorphic "*) info "Anamorphic desqueeze: Camera > Settings > Camera Assistant > anamorphic lens desqueeze (1.33x / 1.55x / 2.0x)." ;; esac
 case " $picked " in *" profps "*) info "Frame-rate unlocks: 24 fps in Video (FHD / UHD / 8K, rear and front); Pro video 4K 25/48/50/100/120 (120 on Wide and Ultrawide), FHD 25/48/50/100, 8K 25, 21:9 Cinema 25/48/50/100/120; Slow motion 4K120 and FHD120 (Log works with Log video on). 24 fps and the 10x need the patched Camera APK (the 10x works on S918BXXUAGZIF today); with a Galaxy Store Camera update or an unknown APK those two are skipped and the XML rates still apply." ;; esac
+case " $picked " in *" uhd60lenses "*) info "4K60 on all lenses: Camera > Video > UHD 60 fps (0.6x/1x/3x/10x lens buttons stay available). Experimental: no stabilization at 3x/10x and the preview can freeze while zooming." ;; esac
 case " $picked " in *" settingssearch "*) info "Settings search: open Settings and tap the search bar." ;; esac
-case " $picked " in *" callscreen "*) info "Call screening: Phone > Settings > Call screening. The AI summary shows an error on the S23; screening and voice messages work." ;; esac
+case " $picked " in *" callscreen "*) info "Call screening: Phone > Settings > Call screening. Screening, greeting, voice messages and the AI summary work (with Language Core 4.0.01.24); AI replies are untested." ;; esac
 case " $picked " in *" autoframe "*) info "4K auto framing was reported to make the camera fail (S918B); turn it off if the camera fails to open." ;; esac
 case " $picked " in *" weather "*) info "Weather effect: Wallpaper and style > Lock screen > Weather > Done. It animates only for rain, snow, fog or daytime sun." ;; esac
 case " $picked " in *" bargein "*) info "Bixby barge-in is untested; turn it off if anything misbehaves." ;; esac

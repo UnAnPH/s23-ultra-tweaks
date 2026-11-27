@@ -24,7 +24,7 @@
 #         camerahdr hdr2023 audioeraser colortone galaxyai highlights camextras autoframe settingssearch bargein
 #         callscreen tenbit hideksu weather wideflash
 #         prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage
-#         anamorphic profps dual5g nronly natroam rambler  (see README.md; the categories they're grouped in are in install.sh and the WebUI)
+#         anamorphic profps uhd60lenses dual5g nronly natroam rambler wearretry  (see README.md; the categories they're grouped in are in install.sh and the WebUI)
 #
 # Nothing here writes to a partition. Every change is a module load, an overlay, a bind mount or a
 # runtime setting, so a reboot always returns the phone to stock. The files themselves stay on storage
@@ -51,7 +51,7 @@ mkdir -p $V; L=$V/tweaks.log; R=$V/run
 [ -f $D/module.prop ] && MODULE=1 || MODULE=0
 APPLY_LOCK=/dev/s23tweaks_apply.lock         # /dev is tmpfs: locks never survive a reboot
 STAYS_TILL_REBOOT="airdrop wifi7 battery india callrec vulkan audioeraser hdr2023 colortone highlights tenbit galaxyai settingssearch hideksu profps"
-TWEAK_IDS="airdrop battery features callrec india hotspot6g wifi7 display logvideo vulkan camerahdr hdr2023 audioeraser colortone galaxyai highlights camextras autoframe settingssearch bargein callscreen tenbit hideksu weather wideflash prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage anamorphic profps dual5g nronly natroam rambler"
+TWEAK_IDS="airdrop battery features wearretry callrec india hotspot6g wifi7 display logvideo vulkan camerahdr hdr2023 audioeraser colortone galaxyai highlights camextras autoframe settingssearch bargein callscreen tenbit hideksu weather wideflash prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage anamorphic profps uhd60lenses dual5g nronly natroam rambler"
 GMS_MIN=261125000                            # Play services 26.11, the first with Mosey support
 # Firmware the AirDrop/Wi-Fi 7 kernel modules are checked against (one line each, read by customize.sh).
 # All are One UI 9 build GZIF on GKI kernel 34343818, and their whole Wi-Fi stack (cnss2, mhi, cfg80211,
@@ -164,6 +164,16 @@ IN_MODEL=SM-S918B
 IN_MODEL_PROPS="ro.product.model ro.product.vendor.model ro.product.system.model ro.product.odm.model ro.product.product.model ro.product.system_ext.model ro.product.bootimage.model ro.product.system_dlkm.model ro.product.vendor_dlkm.model ro.boot.em.model"
 IN_SALES_PROPS="ro.csc.sales_code ro.boot.sales_code persist.audio.sales_code ril.sales_code"
 NEARBY_FLAGS="45704091 45723015 sharing_package_whitelist_check_bypass"   # Nearby Sharing: enableExternalProviders + provider-registry gate + GMS 26.46+ source-stamp bypass
+# Play services 26.46 guards its own broadcasts (Dqjx.c): an implicit one (no target app) whose action isn't on a
+# list throws IllegalStateException and crashes Play services. Incoming AirDrop shares hit it with
+# nearby.sharing.TRANSFER_UPDATE (issue #41). The list is flag 45645310 of config package com.google.android.gms: a
+# bytes flag holding a repeated string (field 1). The module adds the Nearby transfer actions to whatever list
+# Play services already has (BCAST_STOCK is the list seen on a phone, used only when none is found).
+# Found by @Ashraf12Nas.
+BCAST_FLAG=45645310
+BCAST_STOCK="com.ifpdos.systembar.action.HIDE_BAR com.seewo.freeform.TASK_MOVE_NO_RESIZE"
+BCAST_NEARBY="com.google.android.gms.nearby.sharing.TRANSFER_UPDATE com.google.android.gms.nearby.sharing.TRANSFER_METADATA com.google.android.gms.nearby.sharing.TRANSFER_FINISHED"
+BCAST_ACTIONS="$BCAST_STOCK $BCAST_NEARBY"   # gms_bcast_flag replaces it with the phone's own list plus BCAST_NEARBY
 
 HIST=/dev/s23tweaks.history   # every apply's lines since boot (tweaks.log holds only the last apply)
 # Set by cleanup when the module is removed after an apply in this boot. The binds that apply made stay
@@ -177,6 +187,27 @@ wait_for() { n=$1; shift; while [ $n -gt 0 ]; do "$@" && return 0; n=$((n-1)); s
 mounted() { mount | grep -q " $1 type $2"; }
 bound() { mount | grep -q " $1 "; }
 running() { ps -A -o ARGS | grep -q "[t]weaks.sh $1"; }
+# The recorder keeps the recent Android log (Info and up, 8 files of 4 MB) and the kernel's Wi-Fi/AirDrop
+# lines in $REC, so a report made after something went wrong already holds what happened: no timed test
+# needed. Root-only files; the report takes filtered, masked lines from them. A busy phone logs ~450 KB a
+# minute at Info; the five UI tags silenced in REC_QUIET are a quarter of that, so 32 MB keeps 1.5 h or so.
+REC=$V/rec
+REC_CONF="4096 7"
+REC_QUIET="View:S SurfaceFlinger:S NotifHistoryProto:S FASModelGlobal:S power_partial_wake_state:S"
+rec_start() {
+  # a recorder from an older version keeps its old size until stopped; restart it with the current one
+  # (only its own session: the guard runs a dmesg -W of its own)
+  if running recorder && [ "$(cat $REC/conf 2>/dev/null)" != "$REC_CONF" ]; then
+    for s in $(pgrep -f "tweaks.sh recorder\$"); do
+      [ "$(cut -d' ' -f6 /proc/$s/stat 2>/dev/null)" = $s ] && [ "$(tr '\0' ' ' < /proc/$s/cmdline)" = "sh $D/tweaks.sh recorder " ] && kill $(pgrep -s $s)
+    done; sleep 1
+  fi
+  running recorder && return 0
+  # exec, so no shell is left waiting on it with the caller's output open (a report read through a pipe
+  # would never end)
+  (exec setsid sh $D/tweaks.sh recorder </dev/null >/dev/null 2>&1) &
+}
+rec_files() { for i in 7 6 5 4 3 2 1; do [ -f $REC/log.$i ] && echo $REC/log.$i; done; [ -f $REC/log ] && echo $REC/log; }
 has() { case " $TWEAKS " in *" $1 "*) return 0 ;; esac; return 1; }
 # cam24fps and slowmo4k120 were folded into profps (they share the same Camera APK patch and
 # camera-feature.xml edit). A saved picks list from an older module may still name them: map both
@@ -207,6 +238,59 @@ nearby_live() {
   [ -f $f ] || { echo "no Nearby config file yet"; return; }
   c=0; t=0; for x in $NEARBY_FLAGS; do t=$((t + 1)); grep -qF "$x" $f && c=$((c + 1)); done
   echo "$c of $t in Play services' live Nearby config$([ $c -lt $t ] && echo "; apply again to put them back")"
+}
+# ad_verdict LOG KMSG "MOSEY_PIDS" "advice when nothing logged": counts one AirDrop attempt's stages in a
+# logcat file (threadtime) and its kernel lines, and sets $v to which stage it reached. rel() then prints the
+# relevant lines. Used by airdrop-test and, on the recorder's log, by the report.
+ad_verdict() {
+  # the Mosey app's processes (it starts only when Quick Share hands it a share). mosey_server is a lazy
+  # service that the module's loop restarts every few seconds, so its start-up lines are left out of the counts
+  apids=" $3 $(pidof com.google.android.mosey) $(awk '/am_proc_start/ && /com\.google\.android\.mosey[],]/ { sub(/.*am_proc_start[^[]*\[[0-9]+,/, ""); sub(/,.*/, ""); print }' $1 | tr '\n' ' ') "
+  rel() { awk -v p="$apids" '{ if (($3 ~ /^[0-9]+$/ && index(p, " " $3 " ")) || $0 ~ /[Mm]osey|[Aa]irdrop|AirDrop|[Aa]wdl|AWDL|NearbySharing|ShareLive|QuickShare|Wonder/) print }' $1 | grep -v '	at '; }
+  idle='AidlLazyServiceRegistrar|reset mosey network resources|Interface is gone, nothing to shutdown|Registering service com\.google\.android\.moseyservice'
+  # Quick Share: its screens opening (activity events), and its log lines (it also logs in the background)
+  nui=$(grep -E 'wm_on_(create|resume)_called|wm_(create|restart|resume)_activity|am_focused' $1 | grep -c sharelive)
+  nsl=$(grep -cE 'ShareLive|QuickShare' $1)
+  napp=$(awk -v p="$apids" '($3 ~ /^[0-9]+$/ && index(p, " " $3 " ")) || $6 ~ /^Mosey/' $1 | grep -c .)
+  nsrv=$(grep -E ' (mosey_server|mosey_daemon)' $1 | grep -cvE "$idle")
+  nst=$(grep -cE 'am_proc_start.*com\.google\.android\.mosey[],]' $1)
+  nmo=$((napp + nst))   # the app is what runs a share; mosey_server alone logs housekeeping too
+  nk=$(grep -ciE 'wonder|awdl|llw' $2)
+  # Play services loading Mosey as a share target: its external provider registry, then the bind
+  nreg=$(grep -cE 'NearbySharing: (Starting external provider registry|Bound to provider ComponentInfo\{com\.google\.android\.mosey)' $1)
+  # an AirDrop share to this phone (Mosey's receive side) and Play services' Nearby starting over (a crash)
+  nin=$(grep -c 'ContextTransferInitiated(context=.*clientName=ReceiveProvider' $1)
+  nrs=$(grep -c 'NearbySharing: NearbySharingService onCreate' $1)
+  nohand="the share never reached the AirDrop side (Share with Apple devices not shown or not tapped, or Play services didn't hand the share to Mosey)"
+  if [ $nin -gt 0 ] && grep -q 'Unexpected implicit intent broadcast start.*nearby\.sharing\.TRANSFER_' $1; then
+    v="An AirDrop share to this phone arrived ($nin), but Play services crashed on its own broadcast guard (issue #41), which cancels it: Play services $(dumpsys package com.google.android.gms 2>/dev/null | grep -m1 -oE 'versionName=[^ ]+' | cut -d= -f2) isn't using the module's AirDrop receive allowlist (Broadcast guard below says which config copies have it). Apply again, which rewrites it and restarts Play services, then retry"
+  elif [ $nin -gt 0 ] && [ $nrs -gt 0 ]; then
+    v="An AirDrop share to this phone arrived ($nin), but Play services' Nearby restarted $nrs times (a crash), which cancels it: the crash lines below show why"
+  elif [ $nmo -gt 0 ]; then
+    if [ $nk -gt 0 ]; then v="Mosey ran and the Wi-Fi driver logged AirDrop link activity: the log shows how far it got"
+    else v="Mosey ran; the kernel log has no AirDrop link lines: the log shows how far Mosey got"; fi
+  elif [ $nui -gt 0 ] && [ $nreg = 0 ]; then
+    v="Quick Share opened, but Play services never loaded Mosey (no external provider registry): its Nearby flags aren't in effect. Apply again (it rewrites them and restarts Play services), then retry"
+  elif [ $nui -gt 0 ]; then
+    if [ $nsrv -gt 0 ]; then v="Quick Share opened, but the Mosey app never started (only mosey_server logged, $nsrv lines): $nohand"
+    else v="Quick Share opened, but Mosey logged nothing: $nohand"; fi
+  elif [ $nsl -gt 0 ]; then v="Mosey logged nothing. Quick Share logged $nsl lines but no screen of it opened; if you did share, $nohand"
+  else v="Neither Quick Share nor Mosey logged anything: $4"; fi
+}
+# is the broadcast-guard allowlist (BCAST_FLAG) in Play services' live config?
+# Play services keeps two copies (user_de, read before the first unlock, and data); check each, since a
+# process can start from either.
+bcast_live() {
+  bl_n=0; bl_ok=0; bl_miss=""
+  for f in $BCAST_SNAPS; do
+    [ -f $f ] || continue; bl_n=$((bl_n + 1))
+    if grep -qF "$BCAST_FLAG" $f && grep -qF "nearby.sharing.TRANSFER_UPDATE" $f; then bl_ok=$((bl_ok + 1))
+    else case $f in /data/user_de/*) bl_miss="${bl_miss:+$bl_miss, }device-protected" ;; *) bl_miss="${bl_miss:+$bl_miss, }data" ;; esac; fi
+  done
+  [ $bl_n -gt 0 ] || { echo "no Play services config file yet"; return; }
+  if [ $bl_ok = $bl_n ]; then echo "AirDrop receive allowlist in the live config ($bl_ok of $bl_n copies)"
+  elif [ $bl_ok -gt 0 ]; then echo "AirDrop receive allowlist in $bl_ok of $bl_n live config copies, missing from the $bl_miss copy; apply again"
+  else echo "AirDrop receive allowlist missing from the live config; apply again"; fi
 }
 AD_SUM=$V/airdrop-test.summary   # the last airdrop-test's verdict, shown in the report
 # what logcat holds: a busy phone fills the main buffer in minutes, so a missing line may just be old
@@ -442,8 +526,8 @@ airdrop_post() {
   # pick up manifest_mosey.xml (IMoseyService/default). Never restart servicemanager itself: Android
   # then reboots with "checkpoint_commit_failed".
   touch /apex/apex-info-list.xml
-  running loop || setsid sh $D/tweaks.sh loop </dev/null >/dev/null 2>&1 &
-  running guard || setsid sh $D/tweaks.sh guard </dev/null >/dev/null 2>&1 &
+  running loop || (exec setsid sh $D/tweaks.sh loop </dev/null >/dev/null 2>&1) &
+  running guard || (exec setsid sh $D/tweaks.sh guard </dev/null >/dev/null 2>&1) &
   n=20; until service check com.google.android.moseyservice.IMoseyService/default | grep -q found; do
     n=$((n-1)); [ $n = 0 ] && fail "IMoseyService did not register"; sleep 1; done
   log "airdrop: mosey_server running"
@@ -453,6 +537,186 @@ airdrop_post() {
   pm enable --user 0 com.google.android.mosey/.ExternalSharingService >/dev/null 2>&1 &&
     log "airdrop: Mosey's sharing service enabled" || log "airdrop: warning: could not enable Mosey's sharing service"
   gms_flags
+  gms_bcast_flag
+}
+
+# --- bytes for the allowlist flag: protobuf field 1 (string), repeated; built with printf octal escapes ---
+pb_oct() { printf "\\$(printf '%03o' $1)"; }
+pb_varint() { n=$1; while [ $n -ge 128 ]; do pb_oct $(( (n & 127) | 128 )); n=$((n >> 7)); done; pb_oct $n; }
+bcast_value() { for a in $BCAST_ACTIONS; do pb_oct 10; pb_varint ${#a}; printf '%s' "$a"; done; }
+# one Flag entry (name + bytes value) as the snapshot's repeated field 5
+bcast_entry() {
+  v=$1; inner=$W/inner.bin
+  { pb_oct 10; pb_varint ${#BCAST_FLAG}; printf '%s' "$BCAST_FLAG"; pb_oct 50; pb_varint $(wc -c < $v); cat $v; } > $inner
+  { pb_oct 42; pb_varint $(wc -c < $inner); cat $inner; }
+}
+
+# Where the broadcast guard reads BCAST_FLAG from. Play services builds config package com.google.android.gms as
+# direct-boot aware (kavc: hmpu.c()/d() set), so its snapshot lives in DEVICE-PROTECTED storage (/data/user_de/0),
+# not in /data/data. The /data/data copy normally doesn't exist, which is why only patching that path never took
+# effect (v1.8.10: "no Play services config file yet" while Dqjx.c kept crashing). Patch whichever copies exist.
+BCAST_SNAPS="/data/user_de/0/com.google.android.gms/files/phenotype/shared/com.google.android.gms.pb /data/data/com.google.android.gms/files/phenotype/shared/com.google.android.gms.pb"
+# bcast_stock FILE: the actions already in FILE's entry for BCAST_FLAG, one per line (none if it has no entry).
+# Snapshot entries are field 5 {1: name, other length-delimited field: value}; the value is repeated field 1 strings.
+bcast_stock() {
+  od -An -v -tx1 "$1" | tr -d ' \n' | awk -v fh="$(printf '%s' "$BCAST_FLAG" | od -An -v -tx1 | tr -d ' \n')" '
+    function hv(c) { return index("0123456789abcdef", c) - 1 }
+    function byte(k) { return hv(substr(h, 2 * k + 1, 1)) * 16 + hv(substr(h, 2 * k + 2, 1)) }
+    function varint(   v, m, b) { v = 0; m = 1
+      while (i < n) { b = byte(i); i++; v += (b % 128) * m; m *= 128; if (b < 128) break }
+      return v }
+    function str(p, l,   s, k) { s = ""; for (k = p; k < p + l; k++) s = s sprintf("%c", byte(k)); return s }
+    { h = $0; n = length(h) / 2; i = 0
+      while (i < n) {
+        key = varint(); wt = key % 8; fn = int(key / 8)
+        if (wt == 0) varint()
+        else if (wt == 1) i += 8
+        else if (wt == 5) i += 4
+        else if (wt == 2) { len = varint(); p = i; e = p + len
+          if (fn == 5) { name = ""; val = -1; vl = 0
+            while (i < e) { k2 = varint(); w2 = k2 % 8
+              if (w2 == 0) varint()
+              else if (w2 == 1) i += 8
+              else if (w2 == 5) i += 4
+              else if (w2 == 2) { l2 = varint(); if (int(k2 / 8) == 1) name = substr(h, 2 * i + 1, 2 * l2); else if (val < 0) { val = i; vl = l2 }; i += l2 }
+              else break }
+            if (name == fh && val >= 0) { i = val; e2 = val + vl
+              while (i < e2) { k3 = varint(); if (k3 % 8 != 2) break; l3 = varint(); if (int(k3 / 8) == 1) print str(i, l3); i += l3 }
+              exit } }
+          i = e }
+        else exit
+      } }'
+}
+# Remove every top-level snapshot entry (field 5) whose flag name is BCAST_FLAG from file $1, in place.
+# A stale entry must go before the new one is appended: two entries with one name break the reader's map.
+pb_drop_flag() {
+  pd_f=$1; pd_fh=$(printf '%s' "${2:-$BCAST_FLAG}" | od -An -v -tx1 | tr -d ' \n'); pd_n=0
+  while [ $pd_n -lt 8 ]; do
+    pd_r=$(od -An -v -tx1 "$pd_f" | tr -d ' \n' | awk -v fh="$pd_fh" '
+      function hv(c) { return index("0123456789abcdef", c) - 1 }
+      function byte(k) { return hv(substr(h, 2 * k + 1, 1)) * 16 + hv(substr(h, 2 * k + 2, 1)) }
+      function varint(   v, m, b) { v = 0; m = 1
+        while (i < n) { b = byte(i); i++; v += (b % 128) * m; m *= 128; if (b < 128) break }
+        return v }
+      { h = $0; n = length(h) / 2; i = 0
+        while (i < n) {
+          st = i; key = varint(); wt = key % 8; fn = int(key / 8)
+          if (wt == 0) varint()
+          else if (wt == 1) i += 8
+          else if (wt == 5) i += 4
+          else if (wt == 2) { len = varint(); p = i; i += len
+            if (fn == 5 && byte(p) == 10) { q = p + 1; save = i; i = q; nl = varint(); nstart = i; i = save
+              if (substr(h, 2 * nstart + 1, 2 * nl) == fh && nl * 2 == length(fh)) { print st, i; exit } } }
+          else exit
+        } }')
+    [ -n "$pd_r" ] || break
+    set -- $pd_r
+    head -c $1 "$pd_f" > "$pd_f.a" && tail -c +$(($2 + 1)) "$pd_f" > "$pd_f.b" && cat "$pd_f.a" "$pd_f.b" > "$pd_f" || break
+    rm -f "$pd_f.a" "$pd_f.b"; pd_n=$((pd_n + 1))
+  done
+  rm -f "$pd_f.a" "$pd_f.b"
+}
+
+# Play services' broadcast guard (see BCAST_FLAG): override its allowlist so an incoming AirDrop share's
+# TRANSFER_UPDATE no longer crashes Play services. Edits a copy of the database, like gms_flags.
+gms_bcast_flag() {
+  G=/data/data/com.google.android.gms; DB=$G/databases/phenotype.db
+  SN=$G/files/phenotype/shared/com.google.android.gms.pb
+  SQ=$AIR/sqlite3; W=$R/gms2; rm -rf $W; mkdir -p $W
+  [ -f $DB ] || return
+  am force-stop com.google.android.gms
+  cp $DB $W/p.db; [ -f $DB-wal ] && cp $DB-wal $W/p.db-wal
+  id=$($SQ $W/p.db "select config_package_id from config_packages where name='com.google.android.gms'")
+  [ -n "$id" ] || { log "airdrop: Play services has no core config yet; AirDrop receive allowlist not set"; rm -rf $W; return; }
+  # the phone's own list (from the live snapshot) plus the Nearby actions, so entries Google adds are kept
+  stock=""; for SN in $BCAST_SNAPS; do [ -f $SN ] && stock="$stock $(bcast_stock $SN | grep -E '^[A-Za-z0-9_.]+$' | tr '\n' ' ')"; done
+  [ -n "$(echo $stock)" ] || stock=$BCAST_STOCK
+  BCAST_ACTIONS=$(printf '%s\n' $stock $BCAST_NEARBY | awk 'NF && !s[$0]++' | tr '\n' ' ')
+  bcast_value > $W/val.bin
+  hex=$(od -An -v -tx1 $W/val.bin | tr -d ' \n')
+  # keep what Play services had for the flag (issue #41): the report shows it, so the list's format can be checked
+  mkdir -p $V/backup
+  for SN in $BCAST_SNAPS; do [ -f $SN ] && [ ! -f $V/backup/bcast_stock_snap.pb ] && ! grep -qF nearby.sharing.TRANSFER_UPDATE $SN && cp $SN $V/backup/bcast_stock_snap.pb; done
+  $SQ $W/p.db "select 'flag-tables', group_concat(name) from sqlite_master where type='table'" > $V/backup/bcast_db.txt 2>&1
+  [ -n "$hex" ] || { log "airdrop: could not build the AirDrop receive allowlist"; rm -rf $W; return; }
+  ok=$($SQ $W/p.db "PRAGMA integrity_check;
+    DELETE FROM experiment_states_to_overrides WHERE override_id IN (SELECT override_id FROM flag_overrides WHERE config_package_id=$id AND account_id=0 AND name='$BCAST_FLAG');
+    DELETE FROM flag_overrides WHERE config_package_id=$id AND account_id=0 AND name='$BCAST_FLAG';
+    INSERT INTO flag_overrides (config_package_id, account_id, name, value, type, source) VALUES ($id, 0, '$BCAST_FLAG', x'$hex', 5, 0);
+    INSERT OR IGNORE INTO experiment_states_to_overrides (experiment_state_id, override_id)
+      SELECT s.experiment_state_id, o.override_id FROM experiment_states s, flag_overrides o
+      WHERE s.config_package_id=$id AND o.config_package_id=$id AND o.name='$BCAST_FLAG';
+    PRAGMA wal_checkpoint(TRUNCATE);" | head -1)
+  [ "$ok" = ok ] || { log "airdrop: Play services database check failed ($ok); AirDrop receive allowlist not set"; rm -rf $W; return; }
+  am force-stop com.google.android.gms
+  cat $W/p.db > $DB && rm -f $DB-wal $DB-shm
+  # the live snapshot(s): put the entry in now so it applies without waiting for Play services to rebuild them.
+  # An existing entry for the flag (the server's stock list) is cut out first: a duplicate name breaks the reader.
+  bc_done=0
+  for SN in $BCAST_SNAPS; do
+    [ -f $SN ] || continue
+    if grep -qF "$BCAST_FLAG" $SN && grep -qF "nearby.sharing.TRANSFER_UPDATE" $SN; then
+      bc_done=$((bc_done + 1)); log "airdrop: AirDrop receive allowlist already in $SN"; continue
+    fi
+    cp $SN $W/s.pb && pb_drop_flag $W/s.pb && bcast_entry $W/val.bin >> $W/s.pb && cat $W/s.pb > $SN &&
+      { bc_done=$((bc_done + 1)); log "airdrop: AirDrop receive allowlist on in $SN (Play services' broadcast guard lets Nearby's transfer updates through)"; } ||
+      log "airdrop: warning: could not patch $SN"
+  done
+  [ $bc_done -gt 0 ] || log "airdrop: AirDrop receive allowlist is in the database; Play services has no live config file for it yet (looked in $BCAST_SNAPS)"
+  # Mosey/Quick Share restart Play services between the DB write and the snapshot write above; a process started in
+  # that window keeps the OLD list in memory and still crashes on TRANSFER_UPDATE (v1.8.11: files right, crash anyway).
+  # Stop it once more now that the files are final, let it come back, and check the entry survived.
+  am force-stop com.google.android.gms
+  sleep 4
+  bc_ok=0
+  for SN in $BCAST_SNAPS; do [ -f $SN ] && grep -qF "$BCAST_FLAG" $SN && grep -qF "nearby.sharing.TRANSFER_UPDATE" $SN && bc_ok=1; done
+  gp=$(pidof com.google.android.gms 2>/dev/null | cut -d' ' -f1)
+  if [ $bc_ok = 1 ]; then log "airdrop: AirDrop receive allowlist final; Play services restarted after it (pid ${gp:-not running yet})"
+  else log "airdrop: warning: Play services dropped the AirDrop receive allowlist when it restarted"; fi
+  rm -rf $W
+}
+
+# wearretry: when a Wear OS watch (Galaxy Watch) drops off Bluetooth, Samsung's watch plugin sets Play
+# services' retry strategy for it to OFF, but Play services overrides OFF to LOW_POWER unless its flag
+# enable_off_retry_strategy (config com.google.android.gms.wearable) is on. Each plugin call also resets the
+# retry backoff, so a watch that keeps coming and going, or answers without its Wear service (after a
+# restart, before it's unlocked), gets retried every few seconds all night, with a wakelock each time.
+# The flag lets OFF stay OFF; the plugin sets LOW_LATENCY again when the watch is back. Untested on a real
+# disconnect. Needs the airdrop download's sqlite3; edits a copy of the database, like gms_flags.
+WR_FLAG=enable_off_retry_strategy; WR_CFG=com.google.android.gms.wearable
+WR_SNAP=/data/data/com.google.android.gms/files/phenotype/shared/$WR_CFG.pb
+wr_live() { [ -f $WR_SNAP ] && grep -qF $WR_FLAG $WR_SNAP; }
+wr_set() {   # wr_set on|off
+  G=/data/data/com.google.android.gms; DB=$G/databases/phenotype.db; SQ=$AIR/sqlite3; W=$R/gmsw
+  [ -x $SQ ] || { log "wearretry: needs the AirDrop download (its sqlite3); pick AirDrop and apply again"; return 1; }
+  if [ ! -f $DB ]; then
+    if [ "${S23T_BOOT:-0}" = 1 ]; then log "wearretry: Play services storage is locked until first unlock; the flag from the earlier run stays"
+    else log "wearretry: Play services database not found; not changed"; fi
+    return 1
+  fi
+  rm -rf $W; mkdir -p $W; am force-stop com.google.android.gms
+  cp $DB $W/p.db; [ -f $DB-wal ] && cp $DB-wal $W/p.db-wal
+  id=$($SQ $W/p.db "select config_package_id from config_packages where name='$WR_CFG'")
+  [ -n "$id" ] || { log "wearretry: Play services has no Wear OS config yet (no watch paired); not changed"; rm -rf $W; return 1; }
+  sql="PRAGMA integrity_check;
+    DELETE FROM experiment_states_to_overrides WHERE override_id IN (SELECT override_id FROM flag_overrides WHERE config_package_id=$id AND account_id=0 AND name='$WR_FLAG');
+    DELETE FROM flag_overrides WHERE config_package_id=$id AND account_id=0 AND name='$WR_FLAG';"
+  [ $1 = on ] && sql="$sql INSERT INTO flag_overrides (config_package_id, account_id, name, value, type, source) VALUES ($id, 0, '$WR_FLAG', 1, 2, 0);
+    INSERT OR IGNORE INTO experiment_states_to_overrides (experiment_state_id, override_id)
+      SELECT s.experiment_state_id, o.override_id FROM experiment_states s, flag_overrides o
+      WHERE s.config_package_id=$id AND o.config_package_id=$id AND o.name='$WR_FLAG';"
+  ok=$($SQ $W/p.db "$sql PRAGMA wal_checkpoint(TRUNCATE);" | head -1)
+  [ "$ok" = ok ] || { log "wearretry: Play services database check failed ($ok); not changed"; rm -rf $W; return 1; }
+  am force-stop com.google.android.gms
+  cat $W/p.db > $DB && rm -f $DB-wal $DB-shm    # cat keeps the file's owner and SELinux label
+  # the live config, so it applies now: cut out any entry for the flag, then (on) append a field-5 entry
+  # (name, boolean true)
+  if [ -f $WR_SNAP ]; then
+    cp $WR_SNAP $W/s.pb && pb_drop_flag $W/s.pb $WR_FLAG &&
+      { [ $1 = off ] || printf "\\052\\$(printf '%03o' $(( ${#WR_FLAG} + 4 )))\\012\\$(printf '%03o' ${#WR_FLAG})%s\\030\\001" $WR_FLAG >> $W/s.pb; } &&
+      cat $W/s.pb > $WR_SNAP
+  fi
+  am force-stop com.google.android.gms; rm -rf $W
 }
 
 # Play services only binds Mosey when server-side Nearby flags are on. Add them as local
@@ -567,6 +831,10 @@ ff_apply() {
 #          Slow motion, FHD240 rebuilt) are folded into this tweak: all three need the same Camera
 #          APK patch and camera-feature.xml edit. slowmo4k120's own availability check ran before
 #          camfeat_apply added the 4K120 entry, so a boot apply on stock firmware skipped it.
+#  uhd60lenses: seamless-zoom-support on the stock BACK 3840X2160_60FPS map, so the 0.6x/1x/3x/10x
+#               lens buttons remain available in UHD 60 Video instead of a remosaic-crop fallback.
+#               The related feature tags (SUPPORT_SEAMLESS_ZOOM, the three 60 fps lens tags, the tele
+#               zoom levels) are already true on the S23 Ultra firmware this tweak applies to.
 # Never add SUPPORT_BACK_WIDE_NORMAL_DUAL_PORTRAIT_VIDEO, SUPPORT_BACK_PORTRAIT_VIDEO_TELE_DUAL or
 # CAMERA_SUPPORT_SEAMLESS_PORTRAITVIDEO: on the S23 they crash the camera ("Zoom is not supported").
 CF_LOG='<local name="SUPPORT_LOG_VIDEO" value="true"/>'
@@ -599,9 +867,9 @@ CF_PROFPS='<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_25FPS" v
 <local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X824_50FPS" value="true" hdr="true" hdr10="true" snapshot-support="true" snapshot-size="4000x1716" vdis="true" super-vdis="false" effect="true" object-tracking="true" seamless-zoom-support="true" physical-zoom-supported="false" external-storage-support="true" touch-af="true" supported-mode="pro_video"/>
 <local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X824_100FPS" value="true" hdr="true" hdr10="false" snapshot-support="false" snapshot-size="4000x1716" vdis="false" super-vdis="false" effect="false" object-tracking="false" seamless-zoom-support="false" physical-zoom-supported="false" external-storage-support="true" supported-mode="pro_video"/>
 <local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_7680X3296_25FPS" value="true" hdr="true" hdr10="false" snapshot-support="true" snapshot-size="4000x1716" vdis="true" super-vdis="false" effect="false" object-tracking="false" seamless-zoom-support="false" physical-zoom-supported="false" external-storage-support="true" supported-mode="pro_video"/>'
-cf_add=""; cf_slowmo_modes=""
+cf_add=""; cf_slowmo_modes=""; cf_seamless_modes=""
 camfeat_apply() {
-  [ -n "$cf_add" ] || [ -n "${cf_video_modes:-}" ] || [ -n "${cf_slowmo_modes:-}" ] || has extstorage || return 1
+  [ -n "$cf_add" ] || [ -n "${cf_video_modes:-}" ] || [ -n "${cf_slowmo_modes:-}" ] || [ -n "${cf_seamless_modes:-}" ] || has extstorage || return 1
   mkdir -p $R; bound $CF && umount $CF
   grep -q '</resources>' $CF || { log "camera: $CF has no </resources>; camera settings skipped"; return 1; }
   grep -v '</resources>' $CF > $R/cf.new
@@ -626,6 +894,22 @@ camfeat_apply() {
     nl=$(printf '%s' "$nl" | sed 's|value="false"|value="true"|')
     grep -v "name=\"$n\"" $R/cf.new > $R/cf.tmp && mv $R/cf.tmp $R/cf.new
     printf '%s\n' "$nl" >> $R/cf.new
+  done
+  # 4K60 on every lens: stock keeps seamless-zoom-support="false" on the UHD 60 fps map, so the
+  # camera falls back to a remosaic crop and the 0.6x/3x/10x lens buttons disappear in UHD 60.
+  # Flip that one attribute in place (the same change the LSPosed camcorder-map hook makes) and keep
+  # all the stock attributes untouched.
+  for n in ${cf_seamless_modes:-}; do
+    o=$(grep -m1 "name=\"$n\"" $R/cf.new || true)
+    [ -n "$o" ] || { log "camera: $n not found in $CF; skipped"; continue; }
+    case "$o" in
+      *seamless-zoom-support=\"true\"*) nl=$o ;;
+      *seamless-zoom-support=\"false\"*) nl=$(printf '%s' "$o" | sed 's/seamless-zoom-support="false"/seamless-zoom-support="true"/') ;;
+      *) nl=$(printf '%s' "$o" | sed 's|/>| seamless-zoom-support="true"/>|') ;;
+    esac
+    grep -v "name=\"$n\"" $R/cf.new > $R/cf.tmp && mv $R/cf.tmp $R/cf.new
+    printf '%s\n' "$nl" >> $R/cf.new
+    log "camera: $n: seamless zoom on (lens switching at UHD 60)"
   done
   # Slow motion: profps adds the 4K120 entry above through cf_add, already with slow_motion in its
   # modes; add slow_motion to the FHD120 entry in place (keeping its position and stock attributes),
@@ -662,7 +946,7 @@ camfeat_apply() {
   mv $R/cf.new $R/camera-feature.xml; chmod 644 $R/camera-feature.xml
   chcon u:object_r:system_file:s0 $R/camera-feature.xml
   mount -o bind,ro $R/camera-feature.xml $CF || fail "camera-feature bind mount"
-  log "camera settings on: $(printf '%s\n' "$cf_add" | sed -n 's/.*name="\([^"]*\)".*/\1/p' | tr '\n' ' ')${cf_video_modes:-}$(has extstorage && echo ' external-storage')"
+  log "camera settings on: $(printf '%s\n' "$cf_add" | sed -n 's/.*name="\([^"]*\)".*/\1/p' | tr '\n' ' ')${cf_video_modes:-}${cf_seamless_modes:-}$(has extstorage && echo ' external-storage')"
   am force-stop com.sec.android.app.camera 2>/dev/null   # make the camera re-read the file, as the adb rebuild does
 }
 
@@ -1402,10 +1686,13 @@ callscreen_apply() {
   [ "$(md5 $A)" = $LC_MD5 ] || { rm -rf $PL/callscreen; log "callscreen: the download is damaged; deleted, apply again to fetch it"; return 1; }
   log "callscreen: installing Samsung Language Core 4.0.01.24 (a minute or two)"
   # The installer can't read files under /data/adb, and streaming it through stdin fails: pm's -S size
-  # is a 32-bit int and the APK is 3.1 GB ("Failed transaction"). Install a copy in /data/local/tmp
-  T=/data/local/tmp/s23t-languagecore.apk
-  [ "$(df -k /data | awk 'NR == 2 {print $4}')" -gt 3500000 ] || { log "callscreen: needs 3.5 GB free to install Language Core; skipped"; return 1; }
-  cp $A $T && chmod 644 $T && chcon u:object_r:shell_data_file:s0 $T && r=$(pm install -r $T 2>&1) || r="couldn't copy it to /data/local/tmp: $r"
+  # is a 32-bit int and the APK is 3.1 GB ("Failed transaction"). Install it from /data/local/tmp, as a
+  # hard link (the same /data): a 3.1 GB copy next to the download left too little room for the
+  # installed 3.1 GB, and that install failed with the same "Failed transaction".
+  T=/data/local/tmp/s23t-languagecore.apk; rm -f $T
+  if ln $A $T 2>/dev/null; then need=3500000; else need=6800000; fi
+  [ "$(df -k /data | awk 'NR == 2 {print $4}')" -gt $need ] || { rm -f $T; log "callscreen: needs $((need / 1000000)).$((need / 100000 % 10)) GB free to install Language Core (its download is kept: free some space and apply again); skipped"; return 1; }
+  { [ -f $T ] || cp $A $T; } && chmod 644 $T && chcon u:object_r:shell_data_file:s0 $T && r=$(pm install -r $T 2>&1) || r="couldn't put it in /data/local/tmp: $r"
   rm -f $T
   case "$r" in
     *Success*) rm -rf $PL/callscreen; mkdir -p $V/undo; touch $V/undo/languagecore; log "callscreen: Language Core installed; turn on Phone > Settings > Call screening" ;;
@@ -1434,7 +1721,9 @@ wx_real() { pm path $WX_PKG >/dev/null 2>&1 && ! wx_stub; }
 wx_live_off() { pm list packages -d --user 0 2>/dev/null | grep -qx "package:$WX_LIVE"; }
 weather_apply() {   # after the framework restart, so the package manager is settled
   if wx_live_off; then pm enable --user 0 $WX_LIVE >/dev/null 2>&1 && log "weather: Samsung's live wallpaper app was disabled; turned it back on"; fi
-  if wx_real; then log "weather: Samsung AI Core is installed; it answers the editor itself"
+  # A real AI Core answers the editor itself on phones Samsung ships the weather model for. On the S23
+  # it asks for an add-on download that fails ("Timeout or response error", issue #40), so say so.
+  if wx_real; then log "weather: Samsung's own AI Core is installed, so the stub isn't; if the lock screen editor's Weather asks to download an add-on and fails, uninstall Samsung AI Core (Settings > Apps) if Android allows it and apply again (a built-in AI Core can't be replaced yet)"
   elif [ "$(wx_code)" = $WX_VER ] && wx_stub; then :
   else
     T=/data/local/tmp/s23t-aicore-stub.apk   # the installer can't read files under /data/adb
@@ -1444,6 +1733,27 @@ weather_apply() {   # after the framework restart, so the package manager is set
     case "$r" in *Success*) ;; *) log "weather: couldn't install the AI Core stub: $r"; return 1 ;; esac
   fi
   log "weather: on; pick it in the lock screen editor (Wallpaper and style > Lock screen > Weather)"
+}
+
+# helpers: apps the picked tweaks need but nobody opens. Samsung's Deep sleeping apps (Settings > Battery >
+# Background usage limits) disables an app it holds (DISABLED_UNTIL_USED) until it's opened, so these stay
+# off: the lock screen Weather button goes, call screening loses its voice, AirDrop doesn't start.
+# Turn them back on; only taking them off that list stops it happening again (it has no shell command, and
+# the module doesn't drive the screen).
+helpers() {   # "package name" lines for the picked tweaks
+  has weather && { echo "$WX_PKG AI_Core_stub_(Weather)"; echo "$WX_LIVE Samsung_live_wallpaper_(Weather)"; }
+  has callscreen && echo "$LC_PKG Samsung_Language_Core_(call_screening)"
+  has airdrop && echo "com.google.android.mosey Mosey_(AirDrop)"
+}
+helpers_off() {   # the helpers that are installed but disabled
+  d=$(pm list packages -d --user 0 2>/dev/null)
+  helpers | while read pk nm; do echo "$d" | grep -qx "package:$pk" && echo "$pk $nm"; done
+}
+helpers_wake() {
+  helpers_off | while read pk nm; do
+    pm enable --user 0 $pk >/dev/null 2>&1 &&
+      log "$(echo $nm | tr _ ' ') was disabled (Samsung's Deep sleeping apps does this); turned it back on. Take it off Settings > Battery > Background usage limits > Deep sleeping apps, or it goes off again"
+  done
 }
 
 # payload_fetch: download and unpack the files of each picked tweak that has them, unless the
@@ -2191,8 +2501,8 @@ why_not() {
   case $1 in
     airdrop|wifi7)
       kernel_supported || { echo "needs firmware $(echo $AIRDROP_FW | sed 's/ /, /g') (this phone runs $build)"; return; }
-      if [ $1 = airdrop ] && ! kernel_stock && ! cfg80211_stock; then
-        echo "this kernel ships its own Wi-Fi stack (cfg80211.ko built for $(cfg80211_vermagic | grep . || echo "an unknown kernel"), not $AIRDROP_KBASE*), which the S24 Wi-Fi driver can't register with; Wi-Fi 7 and the 6 GHz hotspot still work"; return
+      if ! kernel_stock && ! cfg80211_stock; then
+        echo "this kernel ships its own Wi-Fi stack (cfg80211.ko built for $(cfg80211_vermagic | grep . || echo "an unknown kernel"), not $AIRDROP_KBASE*), which the S24 Wi-Fi driver can't register with; the 6 GHz hotspot still works"; return
       fi
       [ "${gms:-0}" -ge $GMS_MIN ] || echo "needs Google Play services 26.11 or newer" ;;
     callrec|india)
@@ -2214,13 +2524,14 @@ why_not() {
     camerahdr) grep -q "<SEC_FLOATING_FEATURE_$CH_KEY>[^<]" $FF 2>/dev/null || echo "this firmware has no $CH_KEY camera setting to add the HDR steps to" ;;
     videosoftening|afcontrol|aelimit) grep -q '</SecFloatingFeatureSet>' $FF 2>/dev/null || echo "this firmware's $FF can't be edited" ;;
     tenbit) [ -f $TB_LIB ] || echo "this phone has no $TB_LIB" ;;
+    wearretry) [ -x $AIR/sqlite3 ] || echo "needs the AirDrop download (its sqlite3 sets the flag): pick AirDrop, apply, then pick this" ;;
     hideksu)
       set -- $(hks_row); m=$(md5 $KSUJAR)
       [ -n "$1" ] && { [ "$m" = $1 ] || bound $KSUJAR; } ||
         { echo "this phone's /system/framework/services.jar (md5 $m) isn't one a patch was made from ($(echo "$HIDEKSU_JARS" | cut -d' ' -f3- | tr '\n' ',' | sed 's/,$//; s/,/, /g')); tools/hideksupatch.sh can make one"; return; }
       pm path me.weishu.kernelsu >/dev/null 2>&1 || echo "the KernelSU manager (me.weishu.kernelsu) isn't installed, so there's nothing to hide" ;;
     hdr2023) for f in $H23_LIBS; do [ -f /system/lib64/$f ] || { echo "this phone has no /system/lib64/$f to replace"; return; }; done ;;
-    logvideo|camextras|wideflash|prowbtint|zoomrocker|slowmoaf|extstorage|anamorphic) grep -q '</resources>' $CF 2>/dev/null || echo "this firmware's $CF can't be edited" ;;
+    logvideo|camextras|wideflash|prowbtint|zoomrocker|slowmoaf|extstorage|anamorphic|uhd60lenses) grep -q '</resources>' $CF 2>/dev/null || echo "this firmware's $CF can't be edited" ;;
     profps) grep -q '</resources>' $CF 2>/dev/null || echo "this firmware's $CF can't be edited" ;;
     galaxyai)
       for p in $GAI_APPS; do [ -f /system/$p/${p#*/}.apk ] || { echo "this phone has no /system/$p/${p#*/}.apk to replace"; return; }; done ;;
@@ -2277,8 +2588,10 @@ is_on() {
         if [ -n "$1" ] && pm path com.sec.android.app.camera 2>/dev/null | grep -q "^package:$CAM_APK$"; then
           bound $CAM_APK && grep -q 'name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_24FPS".*supported-mode="[^"]*video' $CF 2>/dev/null
         else true; fi; } ;;
+    uhd60lenses) bound $CF && grep -q 'name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_60FPS".*seamless-zoom-support="true"' $CF 2>/dev/null ;;
     autoframe) grep -q "<SEC_FLOATING_FEATURE_CAMERA_CONFIG_AUTOFRAMING>uhd<" $FF 2>/dev/null ;;
     bargein) grep -q "<SEC_FLOATING_FEATURE_BIXBY_CONFIG_BARGEIN_PARAM_MODE>2<" $FF 2>/dev/null ;;
+    wearretry) wr_live ;;
     weather) grep -q "<SEC_FLOATING_FEATURE_$WX_KEY>[^<]*GENWEATHER" $FF 2>/dev/null && pm path $WX_PKG >/dev/null 2>&1 && ! wx_live_off ;;
     settingssearch) bound /system/$SSI/SecSettingsIntelligence.apk ;;
     callscreen) [ "$(lc_installed)" -ge 400000000 ] 2>/dev/null ;;
@@ -2327,6 +2640,7 @@ apply)
   else take_lock || { echo "another apply is already running (see $L)" >&2; exit 3; }; fi
   trap 'rm -rf $APPLY_LOCK' EXIT
   [ -e $REMOVED ] && { : > $L; fail "$REMOVED_MSG"; }
+  rec_start
   picks=$(migrate_choices "$2")
   TWEAKS=" $picks "; : > $L
   [ "$picks" = "$2" ] || log "choices: cam24fps and slowmo4k120 are part of profps now; applying profps"
@@ -2340,6 +2654,11 @@ apply)
     w=$(why_not $x); if [ -n "$w" ]; then log "$x: skipped: $w"; else keep="$keep $x"; fi
   done
   TWEAKS=" $keep "
+  if has wifi7 && ! has airdrop; then
+    keep=$(echo "$keep" | sed 's/ wifi7//g; s/^wifi7 //; s/^wifi7$//')
+    TWEAKS=" $keep "
+    log "wifi7: skipped: needs airdrop (the S24 Wi-Fi driver)"
+  fi
   # what an apply doesn't undo (binds, kernel modules, properties) stays until a reboot: say so
   for x in $STAYS_TILL_REBOOT; do
     has $x && continue
@@ -2408,6 +2727,7 @@ $CF_ANAMORPHIC_SCALER"
   has profps && cf_add="$cf_add
 $CF_PROFPS"
   has profps && cf_slowmo_modes="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_120FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_120FPS"
+  has uhd60lenses && cf_seamless_modes="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_60FPS"
   has profps && cf_video_modes="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_24FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_24FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_7680X4320_24FPS FRONT_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_24FPS FRONT_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_24FPS"
   camfeat_apply && restart=1
   has profps && cam24fps_bind   # XML-only when the Camera APK isn't one the patch knows; the log says what was skipped
@@ -2465,12 +2785,15 @@ $CF_PROFPS"
   has camextras && directorsview_pref
   if has wideflash; then wideflash_pref
   elif [ -f $WF_UNDO ]; then wideflash_unpref && log "wideflash: not picked; the camera's wide-lens flash setting is back as it was"; fi
+  helpers_wake
   has callscreen && callscreen_apply
   if has weather; then weather_apply
   elif wx_stub; then pm uninstall $WX_PKG >/dev/null 2>&1 && log "weather: not picked; AI Core stub uninstalled"; fi
   if has dual5g; then dual5g_apply
   elif [ -f $D5G/applied ]; then log "dual5g: not picked; putting the original modem file back"; dual5g_restore; fi
   has airdrop && airdrop_post
+  if has wearretry; then wr_set on && log "wearretry: on; Play services no longer retries the watch while it's away (untested: if the watch stops reconnecting, unpick this)"
+  elif wr_live; then wr_set off && log "wearretry: not picked; Play services' own watch retry setting is back"; fi
   [ $restart = 1 ] && statusbar_wifi_refresh   # the framework restart can drop the Wi-Fi status-bar icon
   on=""; off=""; for x in $picks; do if is_on $x; then on="$on $x"; else off="$off $x"; fi; done
   log "on:${on:- none}"
@@ -2495,7 +2818,7 @@ probe)
   ver=$( [ $MODULE = 1 ] && grep -m1 '^version=' $D/module.prop | cut -d= -f2 || echo script)
   j() { w=$(why_not $1); printf '{"id":"%s","available":%s,"why":"%s","active":%s}' "$1" \
           "$( [ -z "$w" ] && echo true || echo false)" "$w" "$(is_on $1 && echo true || echo false)"; }
-  sim=$(getprop gsm.sim.operator.numeric | cut -d, -f1)   # MCC+MNC of the first SIM; 404/405 = India
+  sim=$(getprop gsm.sim.operator.numeric | cut -d, -f1)   # MCC+MNC of the first SIM; 404/405/406 = India
   printf '{"version":"%s","module":%s,"phone":{"model":"%s","firmware":"%s","csc":"%s","android":"%s","kernel":"%s","gms":%s,"sim":"%s"},' \
     "$ver" "$( [ $MODULE = 1 ] && echo true || echo false)" "$model" "$build" "$csc" "$android" "$kern" "${gms:-0}" "$sim"
   printf '"picked":"%s","autostart":%s,"applying":%s,"tweaks":[' "$(migrate_choices "$(cat $V/choices 2>/dev/null)")" \
@@ -2508,6 +2831,22 @@ loop)
   # mosey.rc does: uid system, groups system+inet, ambient NET_ADMIN/NET_RAW, u:r:mosey_server:s0
   # (as root it fails to open /dev/tun). It's a lazy service that exits when idle: restart it.
   while true; do $AIR/moseyrun; sleep 1; done
+  ;;
+recorder)
+  # logcat rotates its own files (-r KB, -n count). It's restarted if it ever ends; -T 1 then starts at
+  # the newest line instead of copying the whole buffer in again.
+  mkdir -p $REC; chmod 700 $REC; t=""; echo "$REC_CONF" > $REC/conf; set -- $REC_CONF
+  ( while true; do logcat -b main,system,events,crash -v threadtime $t -f $REC/log -r $1 -n $2 '*:I' $REC_QUIET 2>/dev/null; t="-T 1"; sleep 10; done ) &
+  # dmesg -W waits for new kernel lines (no polling); only Wi-Fi/AirDrop ones are kept, trimmed to ~1 MB
+  while true; do
+    dmesg -W 2>/dev/null | grep --line-buffered -iE 'wonder|awdl|llw|wlan|cnss|firmware|mosey' |
+      grep --line-buffered -vE 'Runtime (suspend|resume)|PCI link|MHI state' | {
+        n=0; while IFS= read -r l; do
+          echo "$(date '+%m-%d %H:%M:%S') $l" >> $REC/kernel; n=$((n + 1))
+          if [ $n -ge 500 ]; then n=0; [ "$(wc -c < $REC/kernel)" -gt 1048576 ] && tail -c 524288 $REC/kernel > $REC/kernel.t && mv $REC/kernel.t $REC/kernel; fi
+        done; }
+    sleep 10
+  done
   ;;
 guard)
   # If the Wi-Fi firmware ever crashes, the S24 driver's recovery leaks the AirDrop interface and
@@ -2535,9 +2874,12 @@ status)
   echo "camextras: horizon lock $(is_on camextras && echo on || echo off), levelling $(bound $HL_LIB && echo "on ($(hl_desc))" || echo off), Director's view $(grep -q '<string name="directors_view_mode">1</string>' $CAM_PREFS 2>/dev/null && echo shown || echo hidden)"
   echo "autoframe: $(grep -o '<SEC_FLOATING_FEATURE_CAMERA_CONFIG_AUTOFRAMING>[^<]*' $FF | cut -d'>' -f2 | grep . || echo stock)"
   echo "bargein:  $(grep -q '<SEC_FLOATING_FEATURE_BIXBY_CONFIG_BARGEIN_PARAM_MODE>2<' $FF && echo on || echo off)"
-  echo "weather:  flag $(grep -q "<SEC_FLOATING_FEATURE_$WX_KEY>[^<]*GENWEATHER" $FF && echo on || echo off), AI Core $(wx_stub && echo "stub $(wx_code)" || { wx_real && echo Samsung || echo none; }), live wallpaper app $(wx_live_off && echo disabled || echo enabled)"
+  echo "wearretry: $(wr_live && echo "on (OFF retry strategy honoured)" || echo off)"
+  echo "weather:  flag $(grep -q "<SEC_FLOATING_FEATURE_$WX_KEY>[^<]*GENWEATHER" $FF && echo on || echo off), AI Core $(wx_stub && echo "stub $(wx_code)" || { wx_real && echo "Samsung $(dumpsys package $WX_PKG 2>/dev/null | grep -m1 -oE 'versionName=[^ ]+' | cut -d= -f2) at $(pm path $WX_PKG 2>/dev/null | head -1 | cut -d: -f2)" || echo none; }), live wallpaper app $(wx_live_off && echo disabled || echo enabled)"
   echo "settingssearch: $(bound /system/$SSI/SecSettingsIntelligence.apk && echo S24 || echo stock)"
   echo "callscreen: Language Core $(dumpsys package $LC_PKG 2>/dev/null | grep -m1 -oE 'versionName=[^ ]+' | cut -d= -f2)"
+  h=$(TWEAKS=" $(migrate_choices "$(cat $V/choices 2>/dev/null)") "; helpers_off | awk '{gsub(/_/, " ", $2); printf "%s%s", (NR > 1 ? ", " : ""), $2}')
+  [ -n "$h" ] && echo "helpers:  disabled: $h (Samsung's Deep sleeping apps; apply turns them back on, then take them off Settings > Battery > Background usage limits > Deep sleeping apps)"
   echo "camerahdr: libraries $([ -f /system/lib64/liblow_light_hdr.arcsoft.so ] && echo on || echo off), list entries $(grep -q 'mfhdr.arcsoft.v4' $FF && echo on || echo off)"
   echo "hdr2023:  $(same_size /system/lib64/libae_bracket_hdr.arcsoft.so $PL/hdr2023/libae_bracket_hdr.arcsoft.so && same_size /system/lib64/libhybrid_high_dynamic_range.arcsoft.so $PL/hdr2023/libhybrid_high_dynamic_range.arcsoft.so && echo "2023 engines" || echo stock)"
   echo "tenbit:   front-camera 10-bit $(is_on tenbit && echo on || echo off)"
@@ -2551,6 +2893,7 @@ status)
   echo "extstorage: $(is_on extstorage && echo on || echo off)"
   echo "anamorphic: $(is_on anamorphic && echo on || echo off)"
   echo "profps: $(is_on profps && echo on || echo off), Camera $(bound $CAM_APK && echo patched || echo stock), 10x $(cam24_profps_on && echo "unhidden at 25/48/50 fps" || echo hidden)"
+  echo "uhd60lenses: $(is_on uhd60lenses && echo "on (0.6x/1x/3x/10x at UHD 60)" || echo off)"
   echo "audioeraser: $([ -f /system/etc/fastScanner.tflite ] && echo on || echo off), engine $(same_size /system/lib64/$VE $PL/audioeraser/$VE && echo S24 || echo stock)"
   echo "colortone: Settings $(bound $SETTINGS && echo patched || echo stock), service $([ -f /system/priv-app/$EAD/$EAD.apk ] && echo on || echo off)"
   echo "galaxyai: $(for p in $GAI_APPS; do n=${p#*/}; printf '%s=%s ' $n "$(same_size /system/$p/$n.apk $PL/galaxyai/$n.apk && echo S24 || echo stock)"; done)C2PA=$(same_size $C2PA $D/files/libC2paDps-shim.so && echo shim || echo stock)"
@@ -2638,6 +2981,7 @@ airdrop-test)
       "Bluetooth $([ "$(settings get global bluetooth_on)" = 1 ] && echo on || echo off)," \
       "AirDrop modules [$(grep -oE '^(wonder|bwfix) ' /proc/modules | tr -d '\n')]"
     echo "  Nearby flags: $(nearby_live)"
+    echo "  Broadcast guard: $(bcast_live)"
     echo "  network interfaces: $(ip -o link 2>/dev/null | awk -F': ' '{ sub(/@.*/, "", $2); print $2 }' | grep -vE '^(lo|dummy|ifb|tunl|gre|erspan|ip_vti|ip6|sit|rmnet|epdg)' | tr '\n' ' ')"
   }
   # the kernel log's last record number now: lines after it are the test's (its clock stops in deep sleep,
@@ -2650,40 +2994,19 @@ airdrop-test)
   after=$(snap)
   # the test's kernel lines (/dev/kmsg works where dmesg can't; each record is "level,number,microseconds,-;text")
   timeout 1 cat /dev/kmsg 2>/dev/null | awk -v k0=$k0 '{ split($0, a, ","); if (a[2] + 0 > k0 + 0) { t = a[3] / 1000000; sub(/^[^;]*;/, ""); printf "[%10.3f] %s\n", t, $0 } }' > $kr
-  # the Mosey app's processes (it starts only when Quick Share hands it a share). mosey_server is a lazy
-  # service that the module's loop restarts every few seconds, so its start-up lines are left out of the counts
-  apids=" $ap0 $(pidof com.google.android.mosey) $(awk '/am_proc_start/ && /com\.google\.android\.mosey[],]/ { sub(/.*am_proc_start[^[]*\[[0-9]+,/, ""); sub(/,.*/, ""); print }' $raw | tr '\n' ' ') "
-  rel() { awk -v p="$apids" '{ if (index(p, " " $3 " ") || $0 ~ /[Mm]osey|[Aa]irdrop|AirDrop|[Aa]wdl|AWDL|NearbySharing|ShareLive|QuickShare|Wonder/) print }' $raw | grep -v '	at '; }
-  idle='AidlLazyServiceRegistrar|reset mosey network resources|Interface is gone, nothing to shutdown|Registering service com\.google\.android\.moseyservice'
-  # Quick Share: its screens opening (activity events), and its log lines (it also logs in the background)
-  nui=$(grep -E 'wm_on_(create|resume)_called|wm_(create|restart|resume)_activity|am_focused' $raw | grep -c sharelive)
-  nsl=$(grep -cE 'ShareLive|QuickShare' $raw)
-  napp=$(awk -v p="$apids" 'index(p, " " $3 " ") || $6 ~ /^Mosey/' $raw | grep -c .)
-  nsrv=$(grep -E ' (mosey_server|mosey_daemon)' $raw | grep -cvE "$idle")
-  nmo=$((napp + nst))   # the app is what runs a share; mosey_server alone logs housekeeping too
-  nst=$(grep -cE 'am_proc_start.*com\.google\.android\.mosey[],]' $raw)
-  nk=$(grep -ciE 'wonder|awdl|llw' $kr)
-  # Play services loading Mosey as a share target: its external provider registry, then the bind
-  nreg=$(grep -cE 'NearbySharing: (Starting external provider registry|Bound to provider ComponentInfo\{com\.google\.android\.mosey)' $raw)
-  nohand="the share never reached the AirDrop side (Share with Apple devices not shown or not tapped, or Play services didn't hand the share to Mosey)"
-  if [ $nmo -gt 0 ]; then
-    if [ $nk -gt 0 ]; then v="Mosey ran and the Wi-Fi driver logged AirDrop link activity: the log shows how far it got"
-    else v="Mosey ran; the kernel log has no AirDrop link lines: the log shows how far Mosey got"; fi
-  elif [ $nui -gt 0 ] && [ $nreg = 0 ]; then
-    v="Quick Share opened, but Play services never loaded Mosey (no external provider registry): its Nearby flags aren't in effect. Apply again (it rewrites them and restarts Play services), then retry"
-  elif [ $nui -gt 0 ]; then
-    if [ $nsrv -gt 0 ]; then v="Quick Share opened, but the Mosey app never started (only mosey_server logged, $nsrv lines): $nohand"
-    else v="Quick Share opened, but Mosey logged nothing: $nohand"; fi
-  elif [ $nsl -gt 0 ]; then v="Mosey logged nothing. Quick Share logged $nsl lines but no screen of it opened; if you did share, $nohand"
-  else v="Neither Quick Share nor Mosey logged anything: start the test, then share within $secs s"; fi
+  ad_verdict $raw $kr "$ap0" "start the test, then share within $secs s"
   { echo "$(date '+%Y-%m-%d %H:%M'), $secs s: $v"
-    echo "  Quick Share screens opened $nui, Quick Share lines $nsl, Mosey app lines $napp, mosey_server lines $nsrv (its idle restarts not counted), Mosey app starts $nst, Play services loading Mosey $nreg, AirDrop link kernel lines $nk"
+    echo "  Quick Share screens opened $nui, Quick Share lines $nsl, Mosey app lines $napp, mosey_server lines $nsrv (its idle restarts not counted), Mosey app starts $nst, Play services loading Mosey $nreg, incoming AirDrop shares $nin, Nearby restarts $nrs, AirDrop link kernel lines $nk"
     echo "  before:"; echo "$before" | sed 's/^/  /'; echo "  after:"; echo "$after" | sed 's/^/  /'
     echo "  log: $out"; } | scrub > $AD_SUM
   { echo "s23-ultra-tweaks AirDrop test, $(date '+%Y-%m-%d %H:%M:%S %z'), module $(mod_ver), $(getprop ro.product.model) $(getprop ro.build.PDA)"
     echo; cat $AD_SUM
     echo; echo "===== Mosey, Quick Share and Nearby lines (all levels, names in quotes masked) ====="
-    rel | sed -E "s/\"[^\"]*\"/<name>/g; s/'[^']*'/<name>/g" | tail -n 4000 | cut -c1-400
+    rel $raw | sed -E "s/\"[^\"]*\"/<name>/g; s/'[^']*'/<name>/g" | tail -n 4000 | cut -c1-400
+    echo; echo "===== crashes during the test (with stack traces) ====="
+    # the tag field keeps its colon when the tag fills 8 characters or more ("AndroidRuntime:"); only errors, so
+    # libc's property warnings don't push the crash out
+    awk '($6 ~ /^(AndroidRuntime|DEBUG|libc):?$/ && $5 ~ /^[EF]$/) || / am_crash/ || (/ am_proc_died/ && /gms|mosey|sharelive/)' $raw | tail -n 400 | cut -c1-300
     echo; echo "===== kernel log during the test ====="
     grep -vE 'Runtime (suspend|resume)|PCI link|MHI state' $kr | tail -n 1500 | cut -c1-300
   } 2>&1 | scrub > $out
@@ -2729,11 +3052,13 @@ report)
     echo "panel white point (sensorRGB) $(cat /sys/class/mdnie/mdnie/sensorRGB 2>/dev/null), night mode $(cat /sys/class/mdnie/mdnie/night_mode 2>/dev/null)"
     sec "AirDrop and Wi-Fi"
     echo "Wi-Fi: $(cmd wifi status 2>/dev/null | grep -m1 -oE 'Wifi is (enabled|disabled)'), $(cmd wifi status 2>/dev/null | grep -m1 -oE 'Wi-Fi standard: [^,]*'), driver $(cat /sys/module/wlan/version 2>/dev/null || grep -m1 -oE '^kiwi_v2 [0-9]+' /proc/modules)"
+    echo "last app to switch Wi-Fi on or off (Android keeps only the last one, without a time): $(dumpsys wifi 2>/dev/null | grep -m1 'API name=WifiEnabled:' | sed -E 's/.*packageName=([^ ]*) toggleState=(true|false).*/\1 \2/; s/ true$/ (on)/; s/ false$/ (off)/')"
     echo "kernel log (Wi-Fi driver, AirDrop modules, PCIe), last 25:"
     klog | grep -iE 'wonder|bwfix|mhifix|s23tweaks|kiwi_v2.*(error|fail|assert|crash)|cnss.*(fail|error|crash|assert|ssr|recover)|wlan.*firmware' |
       grep -vE 'Runtime (suspend|resume)|PCI link|MHI state' | tail -n 25 | sed 's/^/  /' | cut -c1-200
     echo "Mosey app: $(pidof com.google.android.mosey >/dev/null && echo running || echo "not running (it starts when Quick Share hands it a share)"); the logs below cover the last $(log_span), so an older start or share isn't in them"
     echo "Nearby flags: $(nearby_live)"
+    echo "Broadcast guard: $(bcast_live)"
     if [ -f $AD_SUM ]; then echo "last AirDrop test (tweaks.sh airdrop-test):"; sed 's/^/  /' $AD_SUM
     else echo "no AirDrop test recorded yet: Status > Record an AirDrop test, then try a share while it records"; fi
     echo "Mosey / Quick Share warnings and errors, last 30 (names in quotes masked):"
@@ -2769,7 +3094,31 @@ report)
       want && /AndroidRuntime: [A-Za-z0-9_.$]+(Exception|Error)/ { e = $0; sub(/.*AndroidRuntime: /, "", e); k = p " | " substr(e, 1, 160)
         n[k]++; last[k] = t; if (!(k in seen)) { seen[k] = 1; o[++m] = k }; want = 0 }
       END { for (i = m; i >= 1; i--) printf "%dx  %s | %s\n", n[o[i]], last[o[i]], o[i] }' | head -n 20
+    sec "the last 3 app crashes with their stack traces (first 40 lines each)"
+    logcat -d -b crash -v threadtime 2>/dev/null | awk '
+      / AndroidRuntime: FATAL EXCEPTION/ { b++; pid[b] = $3; n[b] = 0 }
+      b && $3 == pid[b] && $6 ~ /^AndroidRuntime/ { if (n[b]++ < 40) t[b] = t[b] $0 "\n" }
+      END { for (i = (b > 3 ? b - 2 : 1); i <= b; i++) printf "%s\n", t[i] }' | cut -c1-300
+    sec "recorded log (the module's recorder keeps the last hour or more; names in quotes masked)"
+    if [ -z "$(rec_files)" ]; then
+      echo "nothing recorded yet: the recorder starts at boot and at every apply (started now; the next report will have it)"
+    else
+      mkdir -p $R; cat $(rec_files) > $R/rec.log; touch $REC/kernel
+      echo "covers $(awk 'NF > 5 { print $1, substr($2, 1, 8); exit }' $R/rec.log) to $(tail -n 1 $R/rec.log | cut -c1-14), recorder $(running recorder && echo running || echo "not running (started now)")"
+      ad_verdict $R/rec.log $REC/kernel "" "no share was tried in this time"
+      echo "AirDrop in this time: $v"
+      echo "  Quick Share screens opened $nui, Quick Share lines $nsl, Mosey app lines $napp, mosey_server lines $nsrv, Mosey app starts $nst, Play services loading Mosey $nreg, incoming AirDrop shares $nin, Nearby restarts $nrs, AirDrop link kernel lines $nk"
+      echo; echo "--- AirDrop, Quick Share and Nearby lines; Wi-Fi and Wallet warnings and errors; crashes; this module (last 3000) ---"
+      awk -v p="$apids" '($3 ~ /^[0-9]+$/ && index(p, " " $3 " ")) || /[Mm]osey|[Aa]irdrop|AirDrop|[Aa]wdl|AWDL|NearbySharing|ShareLive|QuickShare|MCFQS|Wonder|setWifiEnabled|same band/ ||
+        ($5 ~ /^[EWF]$/ && /[Ww]ifi|wpa_supplicant|[Ww]allet|SPAY|[Ss]pay/) || / (AndroidRuntime|DEBUG) *:|am_crash|am_anr|s23tweaks/ ||
+        (/ am_proc_died/ && /gms|mosey|sharelive/)' $R/rec.log |
+        awk '!/	at / || $6 ~ /^AndroidRuntime/' | sed -E "s/\"[^\"]*\"/<name>/g; s/'[^']*'/<name>/g" | tail -n 3000 | cut -c1-300
+      echo; echo "--- kernel: Wi-Fi and AirDrop lines (last 400) ---"
+      tail -n 400 $REC/kernel | cut -c1-300
+      rm -f $R/rec.log
+    fi
   } 2>&1 | scrub > $out
+  rec_start
   echo "$out"
   ;;
 dual5g-restore)
@@ -2788,8 +3137,13 @@ unflag)
   in_list=""
   for f in $NEARBY_FLAGS; do in_list="${in_list:+$in_list, }'$f'"; done
   $SQ $W/p.db "DELETE FROM experiment_states_to_overrides WHERE override_id IN (SELECT override_id FROM flag_overrides WHERE name IN ($in_list) AND account_id=0);
-    DELETE FROM flag_overrides WHERE name IN ($in_list) AND account_id=0; PRAGMA wal_checkpoint(TRUNCATE);" >/dev/null
+    DELETE FROM flag_overrides WHERE name IN ($in_list) AND account_id=0;
+    DELETE FROM experiment_states_to_overrides WHERE override_id IN (SELECT override_id FROM flag_overrides WHERE name='$BCAST_FLAG' AND account_id=0);
+    DELETE FROM flag_overrides WHERE name='$BCAST_FLAG' AND account_id=0;
+    DELETE FROM experiment_states_to_overrides WHERE override_id IN (SELECT override_id FROM flag_overrides WHERE name='$WR_FLAG' AND account_id=0);
+    DELETE FROM flag_overrides WHERE name='$WR_FLAG' AND account_id=0; PRAGMA wal_checkpoint(TRUNCATE);" >/dev/null
   am force-stop com.google.android.gms; cat $W/p.db > $DB && rm -f $DB-wal $DB-shm; rm -rf $W
+  wr_live && cp $WR_SNAP $R/wr.pb && pb_drop_flag $R/wr.pb $WR_FLAG && cat $R/wr.pb > $WR_SNAP; rm -f $R/wr.pb
   echo "Play services flag overrides removed"
   ;;
 autostart)
@@ -2816,6 +3170,7 @@ boot)
   B=$V/boot.log
   blog() { echo "$(date '+%F %T') $*" >> $B; }
   note() { cmd notification post -S bigtext -t "S23 tweaks" s23tweaks "$1" >/dev/null 2>&1; }
+  rec_start
   [ -f $V/autostart ] || exit 0
   t=$(migrate_choices "$(cat $V/choices 2>/dev/null)"); [ -n "$t" ] || exit 0
   # KernelSU can run boot scripts more than once per boot (seen with DFRoot's late load): only the
