@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.8.11
 
 - **Fix: `callscreen` could fail with "install failed: … Failed transaction (2147483646)" on a phone with 7 to 10 GB free.** The install put a 3.1 GB copy of Language Core next to its 3.1 GB download, which left too little room for the installed app. It now installs from a hard link to the download, so it needs 3.5 GB free at that point instead of 6.8 GB (untested on a phone so far). If space is still short, the log says so and keeps the download for the next apply.
 - **Fix: the AirDrop test's crash section missed Play services' crash.** Its filter matched the tag `AndroidRuntime` without the colon logcat prints after long tags, so the stack trace of the crash that cancels an incoming share never made it into the file, and libc's property warnings filled the section instead. It now keeps errors from AndroidRuntime, DEBUG and libc. When the crash is Play services' broadcast guard (#41), the verdict now says so and names the Play services version (#49). The *Broadcast guard* line now checks each of Play services' two config copies; it used to pass when either one had the allowlist.
