@@ -1680,10 +1680,13 @@ callscreen_apply() {
   [ "$(md5 $A)" = $LC_MD5 ] || { rm -rf $PL/callscreen; log "callscreen: the download is damaged; deleted, apply again to fetch it"; return 1; }
   log "callscreen: installing Samsung Language Core 4.0.01.24 (a minute or two)"
   # The installer can't read files under /data/adb, and streaming it through stdin fails: pm's -S size
-  # is a 32-bit int and the APK is 3.1 GB ("Failed transaction"). Install a copy in /data/local/tmp
-  T=/data/local/tmp/s23t-languagecore.apk
-  [ "$(df -k /data | awk 'NR == 2 {print $4}')" -gt 3500000 ] || { log "callscreen: needs 3.5 GB free to install Language Core; skipped"; return 1; }
-  cp $A $T && chmod 644 $T && chcon u:object_r:shell_data_file:s0 $T && r=$(pm install -r $T 2>&1) || r="couldn't copy it to /data/local/tmp: $r"
+  # is a 32-bit int and the APK is 3.1 GB ("Failed transaction"). Install it from /data/local/tmp, as a
+  # hard link (the same /data): a 3.1 GB copy next to the download left too little room for the
+  # installed 3.1 GB, and that install failed with the same "Failed transaction".
+  T=/data/local/tmp/s23t-languagecore.apk; rm -f $T
+  if ln $A $T 2>/dev/null; then need=3500000; else need=6800000; fi
+  [ "$(df -k /data | awk 'NR == 2 {print $4}')" -gt $need ] || { rm -f $T; log "callscreen: needs $((need / 1000000)).$((need / 100000 % 10)) GB free to install Language Core (its download is kept: free some space and apply again); skipped"; return 1; }
+  { [ -f $T ] || cp $A $T; } && chmod 644 $T && chcon u:object_r:shell_data_file:s0 $T && r=$(pm install -r $T 2>&1) || r="couldn't put it in /data/local/tmp: $r"
   rm -f $T
   case "$r" in
     *Success*) rm -rf $PL/callscreen; mkdir -p $V/undo; touch $V/undo/languagecore; log "callscreen: Language Core installed; turn on Phone > Settings > Call screening" ;;

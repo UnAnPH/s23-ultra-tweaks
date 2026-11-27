@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Fix: `callscreen` could fail with "install failed: … Failed transaction (2147483646)" on a phone with 7 to 10 GB free.** The install put a 3.1 GB copy of Language Core next to its 3.1 GB download, which left too little room for the installed app. It now installs from a hard link to the download, so it needs 3.5 GB free at that point instead of 6.8 GB (untested on a phone so far). If space is still short, the log says so and keeps the download for the next apply.
 - **New: `uhd60lenses`, 4K60 on all lenses in standard Video.** Samsung's `camera-feature.xml` keeps `BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_60FPS` at `seamless-zoom-support="false"`, so in UHD 60 the camera falls back to a remosaic crop and the 0.6×/1×/3×/10× lens buttons vanish. The tweak flips that one attribute in the phone's own file and binds it, exactly the change the camcorder-feature hook in the S23 Ultimate LSPosed module makes; the related feature tags are already true on the supported firmware. No download, and it reverts on reboot. It is part of the **Camera Tweaks** bundle. Verified on an S23 Ultra. **Experimental and not part of the Camera Tweaks bundle:** @moesuito reports no stabilization at 3× and 10×, and the preview freezing while zooming, because 4K60 has no seamless-zoom map. (PR #38, by FoxxoOwO.)
 
 ## v1.8.10
