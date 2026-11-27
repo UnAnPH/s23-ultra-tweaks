@@ -108,7 +108,7 @@ desc=("AirDrop: Quick Share > Share with Apple devices (S24 Wi-Fi driver + Googl
       "Record to USB-C storage: record straight to a USB-C SSD or drive in every video mode"
       "Anamorphic desqueeze: Camera Assistant's 1.33x / 1.55x / 2.0x anamorphic lens desqueeze"
       "Frame-rate unlocks: 24 fps in standard Video (FHD, UHD and 8K, rear and front); Pro video 4K/21:9 25/48/50/100/120, FHD 25/48/50/100, 8K 25 and the 10x super tele at 25/48/50; and Slow motion 4K120/FHD120 with the FHD240 menu entry rebuilt (24 fps and the 10x need a stock Samsung Camera the patch knows; the other rates are XML-only and work anywhere)"
-      "4K60 on all lenses in Video: keeps the 0.6x, 1x, 3x and 10x lens buttons available at UHD 60 fps instead of a remosaic crop"
+      "4K60 on all lenses in Video: keeps the 0.6x, 1x, 3x and 10x lens buttons available at UHD 60 fps instead of a remosaic crop (experimental: no stabilization at 3x/10x, can freeze while zooming)"
       "Always On Display: lock screen wallpaper, and AOD brightness that follows the room light"
       "Adaptive color tone: Settings > Display, the screen's colour follows the room light (1 MB download)"
       "Vulkan rendering: apps draw with Vulkan instead of OpenGL"
@@ -268,7 +268,7 @@ case " $picked " in *" slowmoaf "*) info "Focus in Slow motion: Camera > Slow mo
 case " $picked " in *" extstorage "*) info "USB-C storage: plug an exFAT USB-C SSD/drive; Camera > Settings > Storage > USB storage, then record in any mode." ;; esac
 case " $picked " in *" anamorphic "*) info "Anamorphic desqueeze: Camera > Settings > Camera Assistant > anamorphic lens desqueeze (1.33x / 1.55x / 2.0x)." ;; esac
 case " $picked " in *" profps "*) info "Frame-rate unlocks: 24 fps in Video (FHD / UHD / 8K, rear and front); Pro video 4K 25/48/50/100/120 (120 on Wide and Ultrawide), FHD 25/48/50/100, 8K 25, 21:9 Cinema 25/48/50/100/120; Slow motion 4K120 and FHD120 (Log works with Log video on). 24 fps and the 10x need the patched Camera APK (the 10x works on S918BXXUAGZIF today); with a Galaxy Store Camera update or an unknown APK those two are skipped and the XML rates still apply." ;; esac
-case " $picked " in *" uhd60lenses "*) info "4K60 on all lenses: Camera > Video > UHD 60 fps (0.6x/1x/3x/10x lens buttons stay available)." ;; esac
+case " $picked " in *" uhd60lenses "*) info "4K60 on all lenses: Camera > Video > UHD 60 fps (0.6x/1x/3x/10x lens buttons stay available). Experimental: no stabilization at 3x/10x and the preview can freeze while zooming." ;; esac
 case " $picked " in *" settingssearch "*) info "Settings search: open Settings and tap the search bar." ;; esac
 case " $picked " in *" callscreen "*) info "Call screening: Phone > Settings > Call screening. Screening, greeting, voice messages and the AI summary work (with Language Core 4.0.01.24); AI replies are untested." ;; esac
 case " $picked " in *" autoframe "*) info "4K auto framing was reported to make the camera fail (S918B); turn it off if the camera fails to open." ;; esac

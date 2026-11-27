@@ -379,7 +379,7 @@ const TWEAKS = [
   { id: "extstorage", cat: "camera", name: "Record to USB-C storage", desc: "Records straight to a USB-C SSD or drive in every video mode (4K60, 4K60 21:9, 8K, FHD120)" },
   { id: "anamorphic", cat: "camera", name: "Anamorphic desqueeze", desc: "Camera Assistant's anamorphic lens desqueeze (1.33× / 1.55× / 2.0×) for anamorphic lenses" },
   { id: "profps", cat: "camera", name: "Frame-rate unlocks", desc: "24 fps in standard Video (FHD, UHD and 8K, rear and front); Pro video 4K/21:9 25/48/50/100/120, FHD 25/48/50/100 and 8K 25, with the 10× super tele unhidden at 25/48/50 on the patched Camera; and Slow motion 4K120/FHD120 with the FHD240 entry rebuilt. The Pro rates and Slow motion are XML-only; 24 fps and the 10× need a stock Samsung Camera the patch knows, so with a Galaxy Store update or an unknown Camera those two are skipped and the rest still applies." },
-  { id: "uhd60lenses", cat: "camera", name: "4K60 on all lenses", desc: "Keeps the 0.6×, 1×, 3× and 10× lens buttons available in standard Video at UHD 60 fps: flips seamless-zoom-support on that resolution's entry in camera-feature.xml instead of falling back to a remosaic crop." },
+  { id: "uhd60lenses", cat: "camera", name: "4K60 on all lenses", desc: "Keeps the 0.6×, 1×, 3× and 10× lens buttons available in standard Video at UHD 60 fps: flips seamless-zoom-support on that resolution's entry in camera-feature.xml instead of falling back to a remosaic crop. Experimental, not in Camera Tweaks: reported to give no stabilization at 3× and 10×, and the preview can freeze while zooming (4K60 has no seamless-zoom map yet)" },
   { id: "display", cat: "display", name: "Full-screen AOD", desc: "The lock screen wallpaper on Always On Display, and AOD brightness that follows the room light" },
   { id: "colortone", cat: "display", name: "Adaptive color tone", desc: "Display colour follows the room light, as on the S24 (1 MB download)" },
   { id: "vulkan", cat: "display", name: "Vulkan rendering", desc: "Apps draw with Vulkan instead of OpenGL, as on the S24. Can make some lock screen animations (stretchable clocks) stutter more; unpick it if so." },
@@ -405,8 +405,8 @@ const TWEAKS = [
 // independent in tweaks.sh and in the saved picks; the page only groups them.
 const BUNDLES = [
   { id: "cameratweaks", cat: "camera", name: "Camera Tweaks",
-    ids: ["wideflash", "prowbtint", "zoomrocker", "videosoftening", "afcontrol", "aelimit", "slowmoaf", "extstorage", "anamorphic", "profps", "uhd60lenses"],
-    desc: "Everything we added to the camera, in one switch: frame-rate unlocks (24 FPS in standard Video on rear and front, the extra Pro video rates with the 10× at 25/48/50 on the patched Camera, and 4K120/FHD120 in Slow motion with the FHD240 entry rebuilt), 4K60 on all lenses in Video, flash and torch on the 0.6× ultrawide, white-balance tint, Video zoom rocker, Camera Assistant's video softening, AF speed/sensitivity, auto exposure limit and anamorphic desqueeze, touch focus in Slow motion and USB-C recording." },
+    ids: ["wideflash", "prowbtint", "zoomrocker", "videosoftening", "afcontrol", "aelimit", "slowmoaf", "extstorage", "anamorphic", "profps"],
+    desc: "Everything we added to the camera, in one switch: frame-rate unlocks (24 FPS in standard Video on rear and front, the extra Pro video rates with the 10× at 25/48/50 on the patched Camera, and 4K120/FHD120 in Slow motion with the FHD240 entry rebuilt), flash and torch on the 0.6× ultrawide, white-balance tint, Video zoom rocker, Camera Assistant's video softening, AF speed/sensitivity, auto exposure limit and anamorphic desqueeze, touch focus in Slow motion and USB-C recording." },
 ];
 const BUNDLE_OF = {};
 for (const b of BUNDLES) for (const id of b.ids) BUNDLE_OF[id] = b;
@@ -436,7 +436,7 @@ const WHERE = {
   hdr2023: ["2023 ArcSoft HDR", "Nothing to set. Bracketed HDR (backlit scenes) is tested; hybrid HDR (ordinary daylight) loads but is untested. If photos look wrong, turn it off."],
   tenbit: ["Front-camera 10-bit", "Nothing to set. Apps that offer 10-bit or HDR video (HLG) now offer it on the selfie camera too; Samsung Camera already had its own."],
   profps: ["Frame-rate unlocks", "Camera → Video → resolution/FPS: 24 fps on FHD, UHD and 8K (rear and front). Pro video: 4K/21:9 25/48/50/100/120, FHD 25/48/50/100, 8K 25; the 10× tele appears at 25/48/50 on S918BXXUAGZIF with the patched Camera, elsewhere it stays hidden. Slow motion: 4K120 and FHD120, with the FHD240 menu entry rebuilt."],
-  uhd60lenses: ["4K60 on all lenses", "Camera → Video → UHD 60 fps. The 0.6×, 1×, 3× and 10× lens buttons stay available (no remosaic crop fallback)."],
+  uhd60lenses: ["4K60 on all lenses", "Camera → Video → UHD 60 fps. The 0.6×, 1×, 3× and 10× lens buttons stay available (no remosaic crop fallback). Experimental: no stabilization at 3× and 10×, and the preview can freeze while zooming; unpick it if that matters to you."],
   wideflash: ["Flash on ultrawide", "Camera → Photo: flash on; Video: torch on. Camera Assistant now shows the ultrawide flash option."],
   cameratweaks: ["Camera Tweaks", "24 fps: Camera → Video → resolution/FPS. Ultrawide flash: Photo flash / Video torch. Tint: Pro or Pro video → white balance. Zoom rocker: Video zoom. 4K120: Slow motion → 4K120 (Log needs the Log video tweak). Camera Assistant: video softening, AF speed/sensitivity, auto exposure limit and anamorphic desqueeze. Touch focus: Slow motion. USB-C: Camera → Settings → Storage. Pro rates: Camera → More → Pro video."],
   videosoftening: ["Video softening", "Camera → Settings → Camera Assistant → Video softening (Off / Medium / High)."],

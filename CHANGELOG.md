@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **New: `uhd60lenses`, 4K60 on all lenses in standard Video.** Samsung's `camera-feature.xml` keeps `BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_60FPS` at `seamless-zoom-support="false"`, so in UHD 60 the camera falls back to a remosaic crop and the 0.6×/1×/3×/10× lens buttons vanish. The tweak flips that one attribute in the phone's own file and binds it, exactly the change the camcorder-feature hook in the S23 Ultimate LSPosed module makes; the related feature tags are already true on the supported firmware. No download, and it reverts on reboot. It is part of the **Camera Tweaks** bundle. Verified on an S23 Ultra. (PR #38, by FoxxoOwO.)
+- **New: `uhd60lenses`, 4K60 on all lenses in standard Video.** Samsung's `camera-feature.xml` keeps `BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_60FPS` at `seamless-zoom-support="false"`, so in UHD 60 the camera falls back to a remosaic crop and the 0.6×/1×/3×/10× lens buttons vanish. The tweak flips that one attribute in the phone's own file and binds it, exactly the change the camcorder-feature hook in the S23 Ultimate LSPosed module makes; the related feature tags are already true on the supported firmware. No download, and it reverts on reboot. It is part of the **Camera Tweaks** bundle. Verified on an S23 Ultra. **Experimental and not part of the Camera Tweaks bundle:** @moesuito reports no stabilization at 3× and 10×, and the preview freezing while zooming, because 4K60 has no seamless-zoom map. (PR #38, by FoxxoOwO.)
 
 ## v1.8.10
 
