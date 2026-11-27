@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.8.9
 
 - **The bug report now holds the last hour or more of logs, so a failure can be reported after the fact.** Until now, the report's logs covered only the last few minutes, so users had to follow timed steps: start a recording, then share within 90 seconds, or make the report right away. The module now runs a recorder from boot (and from every apply). It keeps Android's log at Info level and up, in rotating files of about 8 MB in `/data/adb/s23tweaks/rec`, plus the kernel's Wi-Fi and AirDrop lines (about 1 MB). The report adds a "recorded log" section:
   - how far AirDrop got in that time (the AirDrop test's verdict, run on the recorded log);
