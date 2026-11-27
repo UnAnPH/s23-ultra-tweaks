@@ -24,7 +24,7 @@
 #         camerahdr hdr2023 audioeraser colortone galaxyai highlights camextras autoframe settingssearch bargein
 #         callscreen tenbit hideksu weather wideflash
 #         prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage
-#         anamorphic profps dual5g nronly natroam rambler  (see README.md; the categories they're grouped in are in install.sh and the WebUI)
+#         anamorphic profps dual5g nronly natroam rambler wearretry  (see README.md; the categories they're grouped in are in install.sh and the WebUI)
 #
 # Nothing here writes to a partition. Every change is a module load, an overlay, a bind mount or a
 # runtime setting, so a reboot always returns the phone to stock. The files themselves stay on storage
@@ -51,7 +51,7 @@ mkdir -p $V; L=$V/tweaks.log; R=$V/run
 [ -f $D/module.prop ] && MODULE=1 || MODULE=0
 APPLY_LOCK=/dev/s23tweaks_apply.lock         # /dev is tmpfs: locks never survive a reboot
 STAYS_TILL_REBOOT="airdrop wifi7 battery india callrec vulkan audioeraser hdr2023 colortone highlights tenbit galaxyai settingssearch hideksu profps"
-TWEAK_IDS="airdrop battery features callrec india hotspot6g wifi7 display logvideo vulkan camerahdr hdr2023 audioeraser colortone galaxyai highlights camextras autoframe settingssearch bargein callscreen tenbit hideksu weather wideflash prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage anamorphic profps dual5g nronly natroam rambler"
+TWEAK_IDS="airdrop battery features wearretry callrec india hotspot6g wifi7 display logvideo vulkan camerahdr hdr2023 audioeraser colortone galaxyai highlights camextras autoframe settingssearch bargein callscreen tenbit hideksu weather wideflash prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage anamorphic profps dual5g nronly natroam rambler"
 GMS_MIN=261125000                            # Play services 26.11, the first with Mosey support
 # Firmware the AirDrop/Wi-Fi 7 kernel modules are checked against (one line each, read by customize.sh).
 # All are One UI 9 build GZIF on GKI kernel 34343818, and their whole Wi-Fi stack (cnss2, mhi, cfg80211,
@@ -196,10 +196,16 @@ REC_CONF="4096 7"
 REC_QUIET="View:S SurfaceFlinger:S NotifHistoryProto:S FASModelGlobal:S power_partial_wake_state:S"
 rec_start() {
   # a recorder from an older version keeps its old size until stopped; restart it with the current one
+  # (only its own session: the guard runs a dmesg -W of its own)
   if running recorder && [ "$(cat $REC/conf 2>/dev/null)" != "$REC_CONF" ]; then
-    pkill -f "tweaks.sh recorder"; pkill -f "logcat .*-f $REC/log"; pkill -f "dmesg -W"; sleep 1
+    for s in $(pgrep -f "tweaks.sh recorder\$"); do
+      [ "$(cut -d' ' -f6 /proc/$s/stat 2>/dev/null)" = $s ] && [ "$(tr '\0' ' ' < /proc/$s/cmdline)" = "sh $D/tweaks.sh recorder " ] && kill $(pgrep -s $s)
+    done; sleep 1
   fi
-  running recorder || setsid sh $D/tweaks.sh recorder </dev/null >/dev/null 2>&1 &
+  running recorder && return 0
+  # exec, so no shell is left waiting on it with the caller's output open (a report read through a pipe
+  # would never end)
+  (exec setsid sh $D/tweaks.sh recorder </dev/null >/dev/null 2>&1) &
 }
 rec_files() { for i in 7 6 5 4 3 2 1; do [ -f $REC/log.$i ] && echo $REC/log.$i; done; [ -f $REC/log ] && echo $REC/log; }
 has() { case " $TWEAKS " in *" $1 "*) return 0 ;; esac; return 1; }
@@ -514,8 +520,8 @@ airdrop_post() {
   # pick up manifest_mosey.xml (IMoseyService/default). Never restart servicemanager itself: Android
   # then reboots with "checkpoint_commit_failed".
   touch /apex/apex-info-list.xml
-  running loop || setsid sh $D/tweaks.sh loop </dev/null >/dev/null 2>&1 &
-  running guard || setsid sh $D/tweaks.sh guard </dev/null >/dev/null 2>&1 &
+  running loop || (exec setsid sh $D/tweaks.sh loop </dev/null >/dev/null 2>&1) &
+  running guard || (exec setsid sh $D/tweaks.sh guard </dev/null >/dev/null 2>&1) &
   n=20; until service check com.google.android.moseyservice.IMoseyService/default | grep -q found; do
     n=$((n-1)); [ $n = 0 ] && fail "IMoseyService did not register"; sleep 1; done
   log "airdrop: mosey_server running"
@@ -578,7 +584,7 @@ bcast_stock() {
 # Remove every top-level snapshot entry (field 5) whose flag name is BCAST_FLAG from file $1, in place.
 # A stale entry must go before the new one is appended: two entries with one name break the reader's map.
 pb_drop_flag() {
-  pd_f=$1; pd_fh=$(printf '%s' "$BCAST_FLAG" | od -An -v -tx1 | tr -d ' \n'); pd_n=0
+  pd_f=$1; pd_fh=$(printf '%s' "${2:-$BCAST_FLAG}" | od -An -v -tx1 | tr -d ' \n'); pd_n=0
   while [ $pd_n -lt 8 ]; do
     pd_r=$(od -An -v -tx1 "$pd_f" | tr -d ' \n' | awk -v fh="$pd_fh" '
       function hv(c) { return index("0123456789abcdef", c) - 1 }
@@ -662,6 +668,49 @@ gms_bcast_flag() {
   if [ $bc_ok = 1 ]; then log "airdrop: AirDrop receive allowlist final; Play services restarted after it (pid ${gp:-not running yet})"
   else log "airdrop: warning: Play services dropped the AirDrop receive allowlist when it restarted"; fi
   rm -rf $W
+}
+
+# wearretry: when a Wear OS watch (Galaxy Watch) drops off Bluetooth, Samsung's watch plugin sets Play
+# services' retry strategy for it to OFF, but Play services overrides OFF to LOW_POWER unless its flag
+# enable_off_retry_strategy (config com.google.android.gms.wearable) is on. Each plugin call also resets the
+# retry backoff, so a watch that keeps coming and going, or answers without its Wear service (after a
+# restart, before it's unlocked), gets retried every few seconds all night, with a wakelock each time.
+# The flag lets OFF stay OFF; the plugin sets LOW_LATENCY again when the watch is back. Untested on a real
+# disconnect. Needs the airdrop download's sqlite3; edits a copy of the database, like gms_flags.
+WR_FLAG=enable_off_retry_strategy; WR_CFG=com.google.android.gms.wearable
+WR_SNAP=/data/data/com.google.android.gms/files/phenotype/shared/$WR_CFG.pb
+wr_live() { [ -f $WR_SNAP ] && grep -qF $WR_FLAG $WR_SNAP; }
+wr_set() {   # wr_set on|off
+  G=/data/data/com.google.android.gms; DB=$G/databases/phenotype.db; SQ=$AIR/sqlite3; W=$R/gmsw
+  [ -x $SQ ] || { log "wearretry: needs the AirDrop download (its sqlite3); pick AirDrop and apply again"; return 1; }
+  if [ ! -f $DB ]; then
+    if [ "${S23T_BOOT:-0}" = 1 ]; then log "wearretry: Play services storage is locked until first unlock; the flag from the earlier run stays"
+    else log "wearretry: Play services database not found; not changed"; fi
+    return 1
+  fi
+  rm -rf $W; mkdir -p $W; am force-stop com.google.android.gms
+  cp $DB $W/p.db; [ -f $DB-wal ] && cp $DB-wal $W/p.db-wal
+  id=$($SQ $W/p.db "select config_package_id from config_packages where name='$WR_CFG'")
+  [ -n "$id" ] || { log "wearretry: Play services has no Wear OS config yet (no watch paired); not changed"; rm -rf $W; return 1; }
+  sql="PRAGMA integrity_check;
+    DELETE FROM experiment_states_to_overrides WHERE override_id IN (SELECT override_id FROM flag_overrides WHERE config_package_id=$id AND account_id=0 AND name='$WR_FLAG');
+    DELETE FROM flag_overrides WHERE config_package_id=$id AND account_id=0 AND name='$WR_FLAG';"
+  [ $1 = on ] && sql="$sql INSERT INTO flag_overrides (config_package_id, account_id, name, value, type, source) VALUES ($id, 0, '$WR_FLAG', 1, 2, 0);
+    INSERT OR IGNORE INTO experiment_states_to_overrides (experiment_state_id, override_id)
+      SELECT s.experiment_state_id, o.override_id FROM experiment_states s, flag_overrides o
+      WHERE s.config_package_id=$id AND o.config_package_id=$id AND o.name='$WR_FLAG';"
+  ok=$($SQ $W/p.db "$sql PRAGMA wal_checkpoint(TRUNCATE);" | head -1)
+  [ "$ok" = ok ] || { log "wearretry: Play services database check failed ($ok); not changed"; rm -rf $W; return 1; }
+  am force-stop com.google.android.gms
+  cat $W/p.db > $DB && rm -f $DB-wal $DB-shm    # cat keeps the file's owner and SELinux label
+  # the live config, so it applies now: cut out any entry for the flag, then (on) append a field-5 entry
+  # (name, boolean true)
+  if [ -f $WR_SNAP ]; then
+    cp $WR_SNAP $W/s.pb && pb_drop_flag $W/s.pb $WR_FLAG &&
+      { [ $1 = off ] || printf "\\052\\$(printf '%03o' $(( ${#WR_FLAG} + 4 )))\\012\\$(printf '%03o' ${#WR_FLAG})%s\\030\\001" $WR_FLAG >> $W/s.pb; } &&
+      cat $W/s.pb > $WR_SNAP
+  fi
+  am force-stop com.google.android.gms; rm -rf $W
 }
 
 # Play services only binds Mosey when server-side Nearby flags are on. Add them as local
@@ -1657,6 +1706,27 @@ weather_apply() {   # after the framework restart, so the package manager is set
   log "weather: on; pick it in the lock screen editor (Wallpaper and style > Lock screen > Weather)"
 }
 
+# helpers: apps the picked tweaks need but nobody opens. Samsung's Deep sleeping apps (Settings > Battery >
+# Background usage limits) disables an app it holds (DISABLED_UNTIL_USED) until it's opened, so these stay
+# off: the lock screen Weather button goes, call screening loses its voice, AirDrop doesn't start.
+# Turn them back on; only taking them off that list stops it happening again (it has no shell command, and
+# the module doesn't drive the screen).
+helpers() {   # "package name" lines for the picked tweaks
+  has weather && { echo "$WX_PKG AI_Core_stub_(Weather)"; echo "$WX_LIVE Samsung_live_wallpaper_(Weather)"; }
+  has callscreen && echo "$LC_PKG Samsung_Language_Core_(call_screening)"
+  has airdrop && echo "com.google.android.mosey Mosey_(AirDrop)"
+}
+helpers_off() {   # the helpers that are installed but disabled
+  d=$(pm list packages -d --user 0 2>/dev/null)
+  helpers | while read pk nm; do echo "$d" | grep -qx "package:$pk" && echo "$pk $nm"; done
+}
+helpers_wake() {
+  helpers_off | while read pk nm; do
+    pm enable --user 0 $pk >/dev/null 2>&1 &&
+      log "$(echo $nm | tr _ ' ') was disabled (Samsung's Deep sleeping apps does this); turned it back on. Take it off Settings > Battery > Background usage limits > Deep sleeping apps, or it goes off again"
+  done
+}
+
 # payload_fetch: download and unpack the files of each picked tweak that has them, unless the
 # unpacked copy already matches the pinned checksum. A failed download skips that tweak, not the rest.
 dl() {   # dl <url> <file>: curl if the phone has it, else KernelSU's busybox wget
@@ -2359,6 +2429,7 @@ why_not() {
     camerahdr) grep -q "<SEC_FLOATING_FEATURE_$CH_KEY>[^<]" $FF 2>/dev/null || echo "this firmware has no $CH_KEY camera setting to add the HDR steps to" ;;
     videosoftening|afcontrol|aelimit) grep -q '</SecFloatingFeatureSet>' $FF 2>/dev/null || echo "this firmware's $FF can't be edited" ;;
     tenbit) [ -f $TB_LIB ] || echo "this phone has no $TB_LIB" ;;
+    wearretry) [ -x $AIR/sqlite3 ] || echo "needs the AirDrop download (its sqlite3 sets the flag): pick AirDrop, apply, then pick this" ;;
     hideksu)
       set -- $(hks_row); m=$(md5 $KSUJAR)
       [ -n "$1" ] && { [ "$m" = $1 ] || bound $KSUJAR; } ||
@@ -2423,6 +2494,7 @@ is_on() {
         else true; fi; } ;;
     autoframe) grep -q "<SEC_FLOATING_FEATURE_CAMERA_CONFIG_AUTOFRAMING>uhd<" $FF 2>/dev/null ;;
     bargein) grep -q "<SEC_FLOATING_FEATURE_BIXBY_CONFIG_BARGEIN_PARAM_MODE>2<" $FF 2>/dev/null ;;
+    wearretry) wr_live ;;
     weather) grep -q "<SEC_FLOATING_FEATURE_$WX_KEY>[^<]*GENWEATHER" $FF 2>/dev/null && pm path $WX_PKG >/dev/null 2>&1 && ! wx_live_off ;;
     settingssearch) bound /system/$SSI/SecSettingsIntelligence.apk ;;
     callscreen) [ "$(lc_installed)" -ge 400000000 ] 2>/dev/null ;;
@@ -2571,12 +2643,15 @@ $CF_PROFPS"
   has camextras && directorsview_pref
   if has wideflash; then wideflash_pref
   elif [ -f $WF_UNDO ]; then wideflash_unpref && log "wideflash: not picked; the camera's wide-lens flash setting is back as it was"; fi
+  helpers_wake
   has callscreen && callscreen_apply
   if has weather; then weather_apply
   elif wx_stub; then pm uninstall $WX_PKG >/dev/null 2>&1 && log "weather: not picked; AI Core stub uninstalled"; fi
   if has dual5g; then dual5g_apply
   elif [ -f $D5G/applied ]; then log "dual5g: not picked; putting the original modem file back"; dual5g_restore; fi
   has airdrop && airdrop_post
+  if has wearretry; then wr_set on && log "wearretry: on; Play services no longer retries the watch while it's away (untested: if the watch stops reconnecting, unpick this)"
+  elif wr_live; then wr_set off && log "wearretry: not picked; Play services' own watch retry setting is back"; fi
   [ $restart = 1 ] && statusbar_wifi_refresh   # the framework restart can drop the Wi-Fi status-bar icon
   on=""; off=""; for x in $picks; do if is_on $x; then on="$on $x"; else off="$off $x"; fi; done
   log "on:${on:- none}"
@@ -2657,9 +2732,12 @@ status)
   echo "camextras: horizon lock $(is_on camextras && echo on || echo off), levelling $(bound $HL_LIB && echo "on ($(hl_desc))" || echo off), Director's view $(grep -q '<string name="directors_view_mode">1</string>' $CAM_PREFS 2>/dev/null && echo shown || echo hidden)"
   echo "autoframe: $(grep -o '<SEC_FLOATING_FEATURE_CAMERA_CONFIG_AUTOFRAMING>[^<]*' $FF | cut -d'>' -f2 | grep . || echo stock)"
   echo "bargein:  $(grep -q '<SEC_FLOATING_FEATURE_BIXBY_CONFIG_BARGEIN_PARAM_MODE>2<' $FF && echo on || echo off)"
+  echo "wearretry: $(wr_live && echo "on (OFF retry strategy honoured)" || echo off)"
   echo "weather:  flag $(grep -q "<SEC_FLOATING_FEATURE_$WX_KEY>[^<]*GENWEATHER" $FF && echo on || echo off), AI Core $(wx_stub && echo "stub $(wx_code)" || { wx_real && echo "Samsung $(dumpsys package $WX_PKG 2>/dev/null | grep -m1 -oE 'versionName=[^ ]+' | cut -d= -f2) at $(pm path $WX_PKG 2>/dev/null | head -1 | cut -d: -f2)" || echo none; }), live wallpaper app $(wx_live_off && echo disabled || echo enabled)"
   echo "settingssearch: $(bound /system/$SSI/SecSettingsIntelligence.apk && echo S24 || echo stock)"
   echo "callscreen: Language Core $(dumpsys package $LC_PKG 2>/dev/null | grep -m1 -oE 'versionName=[^ ]+' | cut -d= -f2)"
+  h=$(TWEAKS=" $(migrate_choices "$(cat $V/choices 2>/dev/null)") "; helpers_off | awk '{gsub(/_/, " ", $2); printf "%s%s", (NR > 1 ? ", " : ""), $2}')
+  [ -n "$h" ] && echo "helpers:  disabled: $h (Samsung's Deep sleeping apps; apply turns them back on, then take them off Settings > Battery > Background usage limits > Deep sleeping apps)"
   echo "camerahdr: libraries $([ -f /system/lib64/liblow_light_hdr.arcsoft.so ] && echo on || echo off), list entries $(grep -q 'mfhdr.arcsoft.v4' $FF && echo on || echo off)"
   echo "hdr2023:  $(same_size /system/lib64/libae_bracket_hdr.arcsoft.so $PL/hdr2023/libae_bracket_hdr.arcsoft.so && same_size /system/lib64/libhybrid_high_dynamic_range.arcsoft.so $PL/hdr2023/libhybrid_high_dynamic_range.arcsoft.so && echo "2023 engines" || echo stock)"
   echo "tenbit:   front-camera 10-bit $(is_on tenbit && echo on || echo off)"
@@ -2819,6 +2897,7 @@ report)
     echo "panel white point (sensorRGB) $(cat /sys/class/mdnie/mdnie/sensorRGB 2>/dev/null), night mode $(cat /sys/class/mdnie/mdnie/night_mode 2>/dev/null)"
     sec "AirDrop and Wi-Fi"
     echo "Wi-Fi: $(cmd wifi status 2>/dev/null | grep -m1 -oE 'Wifi is (enabled|disabled)'), $(cmd wifi status 2>/dev/null | grep -m1 -oE 'Wi-Fi standard: [^,]*'), driver $(cat /sys/module/wlan/version 2>/dev/null || grep -m1 -oE '^kiwi_v2 [0-9]+' /proc/modules)"
+    echo "last app to switch Wi-Fi on or off (Android keeps only the last one, without a time): $(dumpsys wifi 2>/dev/null | grep -m1 'API name=WifiEnabled:' | sed -E 's/.*packageName=([^ ]*) toggleState=(true|false).*/\1 \2/; s/ true$/ (on)/; s/ false$/ (off)/')"
     echo "kernel log (Wi-Fi driver, AirDrop modules, PCIe), last 25:"
     klog | grep -iE 'wonder|bwfix|mhifix|s23tweaks|kiwi_v2.*(error|fail|assert|crash)|cnss.*(fail|error|crash|assert|ssr|recover)|wlan.*firmware' |
       grep -vE 'Runtime (suspend|resume)|PCI link|MHI state' | tail -n 25 | sed 's/^/  /' | cut -c1-200
@@ -2875,7 +2954,7 @@ report)
       echo "AirDrop in this time: $v"
       echo "  Quick Share screens opened $nui, Quick Share lines $nsl, Mosey app lines $napp, mosey_server lines $nsrv, Mosey app starts $nst, Play services loading Mosey $nreg, incoming AirDrop shares $nin, Nearby restarts $nrs, AirDrop link kernel lines $nk"
       echo; echo "--- AirDrop, Quick Share and Nearby lines; Wi-Fi and Wallet warnings and errors; crashes; this module (last 3000) ---"
-      awk -v p="$apids" '($3 ~ /^[0-9]+$/ && index(p, " " $3 " ")) || /[Mm]osey|[Aa]irdrop|AirDrop|[Aa]wdl|AWDL|NearbySharing|ShareLive|QuickShare|MCFQS|Wonder/ ||
+      awk -v p="$apids" '($3 ~ /^[0-9]+$/ && index(p, " " $3 " ")) || /[Mm]osey|[Aa]irdrop|AirDrop|[Aa]wdl|AWDL|NearbySharing|ShareLive|QuickShare|MCFQS|Wonder|setWifiEnabled|same band/ ||
         ($5 ~ /^[EWF]$/ && /[Ww]ifi|wpa_supplicant|[Ww]allet|SPAY|[Ss]pay/) || / (AndroidRuntime|DEBUG) *:|am_crash|am_anr|s23tweaks/ ||
         (/ am_proc_died/ && /gms|mosey|sharelive/)' $R/rec.log |
         awk '!/	at / || $6 ~ /^AndroidRuntime/' | sed -E "s/\"[^\"]*\"/<name>/g; s/'[^']*'/<name>/g" | tail -n 3000 | cut -c1-300
@@ -2905,8 +2984,11 @@ unflag)
   $SQ $W/p.db "DELETE FROM experiment_states_to_overrides WHERE override_id IN (SELECT override_id FROM flag_overrides WHERE name IN ($in_list) AND account_id=0);
     DELETE FROM flag_overrides WHERE name IN ($in_list) AND account_id=0;
     DELETE FROM experiment_states_to_overrides WHERE override_id IN (SELECT override_id FROM flag_overrides WHERE name='$BCAST_FLAG' AND account_id=0);
-    DELETE FROM flag_overrides WHERE name='$BCAST_FLAG' AND account_id=0; PRAGMA wal_checkpoint(TRUNCATE);" >/dev/null
+    DELETE FROM flag_overrides WHERE name='$BCAST_FLAG' AND account_id=0;
+    DELETE FROM experiment_states_to_overrides WHERE override_id IN (SELECT override_id FROM flag_overrides WHERE name='$WR_FLAG' AND account_id=0);
+    DELETE FROM flag_overrides WHERE name='$WR_FLAG' AND account_id=0; PRAGMA wal_checkpoint(TRUNCATE);" >/dev/null
   am force-stop com.google.android.gms; cat $W/p.db > $DB && rm -f $DB-wal $DB-shm; rm -rf $W
+  wr_live && cp $WR_SNAP $R/wr.pb && pb_drop_flag $R/wr.pb $WR_FLAG && cat $R/wr.pb > $WR_SNAP; rm -f $R/wr.pb
   echo "Play services flag overrides removed"
   ;;
 autostart)

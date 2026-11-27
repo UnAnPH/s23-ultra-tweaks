@@ -8,7 +8,7 @@ set -euo pipefail
 # below can read the rest of the script from stdin (curl | bash).
 main() {
 REPO=dtechterminal/s23-ultra-tweaks
-VERSION=v1.8.9
+VERSION=v1.8.10
 AIRDROP_KBASE=5.15.197-android13-8-34343818-ab; AIRDROP_FW="S918WVLU8GZIF S918BXXUAGZIF S918U1UEU8GZIF S918USQU8GZIF S918NKSU8GZIF S9180ZHU8GZIF"   # as in device/tweaks.sh
 PHONE_DIR=/data/adb/s23tweaks          # state (and the code, when the module isn't installed)
 MODULE_DIR=/data/adb/modules/s23_ultra_tweaks
@@ -83,10 +83,10 @@ ids=(airdrop wifi7 hotspot6g
      logvideo camextras camerahdr hdr2023 autoframe tenbit wideflash prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage anamorphic profps
      display colortone vulkan weather
      galaxyai highlights audioeraser settingssearch callscreen bargein
-     battery features hideksu
+     battery features hideksu wearretry
      callrec india dual5g nronly natroam
      rambler)
-cat=(A A A B B B B B B B B B B B B B B B B C C C C D D D D D D E E E F F F F F D)
+cat=(A A A B B B B B B B B B B B B B B B B C C C C D D D D D D E E E E F F F F F D)
 cats=(A B C D E F)
 catname=("Connectivity" "Camera" "Display and graphics" "Galaxy AI and Samsung apps" "Battery and settings" "Carrier")
 desc=("AirDrop: Quick Share > Share with Apple devices (S24 Wi-Fi driver + Google's Mosey; 20 MB download)"
