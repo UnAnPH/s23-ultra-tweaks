@@ -28,6 +28,9 @@
  *
  * Modes:
  *   hidemnt once <pid>            umount module mounts in that pid's mount namespace, now (no policy).
+ *   hidemnt rdonly <path>         make the bind mount at <path> read-only (MS_REMOUNT|MS_BIND|MS_RDONLY), in the
+ *                                 caller's mount namespace. `mount -o bind,ro` leaves a bind read-write, and
+ *                                 toybox's remount,bind,ro remounts the whole filesystem instead.
  *   hidemnt daemon <override> [<syslist>]
  *                                 watch process spawns (kernel proc connector) and umount in each
  *                                 app the policy says to hide from; also sweeps already-running apps
@@ -611,12 +614,19 @@ int main(int argc, char **argv)
 		printf("hidemnt: %d mounts hidden from pid %s\n", r, argv[2]);
 		return 0;
 	}
+	if (argc == 3 && strcmp(argv[1], "rdonly") == 0) {
+		if (mount(NULL, argv[2], NULL, MS_REMOUNT | MS_BIND | MS_RDONLY, NULL) != 0) {
+			fprintf(stderr, "hidemnt: remount %s read-only: %s\n", argv[2], strerror(errno));
+			return 1;
+		}
+		return 0;
+	}
 	if ((argc == 3 || argc == 4) && strcmp(argv[1], "daemon") == 0) {
 		if (argc == 4)
 			g_sysfile = argv[3];
 		return daemon_loop(argv[2]);
 	}
 
-	fprintf(stderr, "usage: %s once <pid> | daemon <override-file> [<system-package-list>]\n", argv[0]);
+	fprintf(stderr, "usage: %s once <pid> | rdonly <path> | daemon <override-file> [<system-package-list>]\n", argv[0]);
 	return 2;
 }

@@ -17,6 +17,7 @@ SHELL_SCRIPTS = [
     "module/action.sh",
     "module/uninstall.sh",
     "tools/hideksupatch.sh",
+    "tools/chargewatts/build.sh",
 ]
 
 
@@ -66,7 +67,7 @@ def check_tweak_parity():
     arr_src = m.group(1)
     probe_sh = (
         "can_airdrop=1 why_airdrop='' can_ct=1 why_ct='' can_lc=1 why_lc='' "
-        "can_ksu=1 why_ksu='' can_rec=1 why_rec='' can_csc=1 why_csc=''\n"
+        "can_ksu=1 why_ksu='' can_rec=1 why_rec='' can_csc=1 why_csc='' can_cw=1 why_cw=''\n"
         f"{arr_src}\n"
         'echo "LEN:${#ids[@]}:${#cat[@]}:${#desc[@]}:${#avail[@]}:${#why[@]}"\n'
         'echo "IDS:${ids[*]}"\n'

@@ -8,7 +8,7 @@ set -euo pipefail
 # below can read the rest of the script from stdin (curl | bash).
 main() {
 REPO=dtechterminal/s23-ultra-tweaks
-VERSION=v1.8.11
+VERSION=v1.8.12
 AIRDROP_KBASE=5.15.197-android13-8-34343818-ab; AIRDROP_FW="S918WVLU8GZIF S918BXXUAGZIF S918U1UEU8GZIF S918USQU8GZIF S918NKSU8GZIF S9180ZHU8GZIF"   # as in device/tweaks.sh
 PHONE_DIR=/data/adb/s23tweaks          # state (and the code, when the module isn't installed)
 MODULE_DIR=/data/adb/modules/s23_ultra_tweaks
@@ -68,6 +68,11 @@ HKS_MD5="30d17f5d60b0d42585b97a94412f6e12 f4c5966939637df194bb465478234fc3 7dc62
 jar_md5=$(sh_ md5sum /system/framework/services.jar 2>/dev/null | cut -d' ' -f1)
 can_ksu=0; why_ksu="this phone's services.jar isn't one a patch was made from (S918W S918WVLU8GZIF, S918B INS, S918U1)"
 case " $HKS_MD5 " in *" ${jar_md5:-none} "*) can_ksu=1; why_ksu="" ;; esac
+# chargewatts patches SystemUI.apk: stock and patched md5s as in CW_ROWS (device/tweaks.sh)
+CW_MD5="adcea3e330bb75ab20c8a3602d5a3a65 1b209734db41e94efb6e2b7d4f37d442"
+sysui_md5=$(sh_ md5sum /system_ext/priv-app/SystemUI/SystemUI.apk 2>/dev/null | cut -d' ' -f1)
+can_cw=0; why_cw="this phone's SystemUI.apk (md5 ${sysui_md5:-unknown}) isn't one a patch was made from (so far S918WVLU8GZIF's)"
+case " $CW_MD5 " in *" ${sysui_md5:-none} "*) can_cw=1; why_cw="" ;; esac
 # an Indian SIM (MCC 404/405/406) makes the carrier picks take the India config instead of plain call recording
 sim=$(sh_ getprop gsm.sim.operator.numeric | cut -d, -f1); sim_india=0; carrier_skip=india
 case "$sim" in 404*|405*|406*) sim_india=1; carrier_skip=callrec ;; esac
@@ -85,8 +90,8 @@ ids=(airdrop wifi7 hotspot6g
      galaxyai highlights audioeraser settingssearch callscreen bargein
      battery features hideksu wearretry
      callrec india dual5g nronly natroam
-     rambler)
-cat=(A A A B B B B B B B B B B B B B B B B B C C C C D D D D D D E E E E F F F F F D)
+     rambler chargewatts)
+cat=(A A A B B B B B B B B B B B B B B B B B C C C C D D D D D D E E E E F F F F F D C)
 cats=(A B C D E F)
 catname=("Connectivity" "Camera" "Display and graphics" "Galaxy AI and Samsung apps" "Battery and settings" "Carrier")
 desc=("AirDrop: Quick Share > Share with Apple devices (S24 Wi-Fi driver + Google's Mosey; 20 MB download)"
@@ -128,9 +133,10 @@ desc=("AirDrop: Quick Share > Share with Apple devices (S24 Wi-Fi driver + Googl
       "Dual SIM 5G: 5G standalone on both SIMs at once instead of only the data SIM (adds your SIMs' country to the modem's 5G+5G list; stays until un-picked; the original is backed up first)"
       "Network mode: 'LTE only' and '5G only' for both SIMs (Settings > Connections > Mobile networks > Network mode; 5G only means standalone 5G, with no signal where there is none)"
       "India: no 'R' roaming icon on national roaming (an Airtel or Jio SIM from another circle counts as home; roaming abroad still shows)"
-      "Gboard Rambler: the Pixel 10/11's Gemini voice typing that drops filler words and takes spoken edits (Gboard settings > Voice typing > Dictation type > Rambler)")
-avail=($can_airdrop $can_airdrop 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 $can_ct 1 1 1 1 1 1 $can_lc 1 1 1 $can_ksu 1 $can_rec $can_csc 1 1 1 1)
-why=("$why_airdrop" "$why_airdrop" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "$why_ct" "" "" "" "" "" "" "$why_lc" "" "" "" "$why_ksu" "" "$why_rec" "$why_csc" "" "" "" "")
+      "Gboard Rambler: the Pixel 10/11's Gemini voice typing that drops filler words and takes spoken edits (Gboard settings > Voice typing > Dictation type > Rambler)"
+      "Charging watts: the lock screen and Always On Display charging lines show the power going into the battery and what holds it back, e.g. 'Super fast charging 2.0: 63% • 10.8 W (phone warm)' (patched SystemUI, checked by MD5; AOD needs the built-in Always On Display 8.9.65.90; 9 MB download; experimental; pick it by number)")
+avail=($can_airdrop $can_airdrop 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 $can_ct 1 1 1 1 1 1 $can_lc 1 1 1 $can_ksu 1 $can_rec $can_csc 1 1 1 1 $can_cw)
+why=("$why_airdrop" "$why_airdrop" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "$why_ct" "" "" "" "" "" "" "$why_lc" "" "" "" "$why_ksu" "" "$why_rec" "$why_csc" "" "" "" "" "$why_cw")
 
 # pre-release builds lived in /data/local/tmp/s23tweaks: carry the picks and the Play services backup over
 sh_ "su -c '[ -d /data/local/tmp/s23tweaks ] && [ ! -e $PHONE_DIR/choices ] && mkdir -p $PHONE_DIR && cp -r /data/local/tmp/s23tweaks/choices /data/local/tmp/s23tweaks/backup $PHONE_DIR/ 2>/dev/null; true'" >/dev/null
@@ -178,13 +184,13 @@ if [ -z "$picked" ]; then
   r=$(ask "Letters/numbers separated by spaces, Enter for all available: ")
   add() { case " $picked " in *" $1 "*) ;; *) picked="$picked $1" ;; esac; }
   if [ -z "$r" ]; then
-    for i in "${!ids[@]}"; do [ "${avail[$i]}" = 1 ] && [ "${ids[$i]}" != $carrier_skip ] && [ "${ids[$i]}" != autoframe ] && [ "${ids[$i]}" != hdr2023 ] && add "${ids[$i]}"; done
+    for i in "${!ids[@]}"; do [ "${avail[$i]}" = 1 ] && [ "${ids[$i]}" != $carrier_skip ] && [ "${ids[$i]}" != autoframe ] && [ "${ids[$i]}" != hdr2023 ] && [ "${ids[$i]}" != chargewatts ] && add "${ids[$i]}"; done
   fi
   for n in $r; do
     n=$(printf '%s' "$n" | tr '[:lower:]' '[:upper:]')
     if [[ "$n" =~ ^[A-F]$ ]]; then
       for i in "${!ids[@]}"; do
-        [ "${cat[$i]}" = "$n" ] && [ "${avail[$i]}" = 1 ] && [ "${ids[$i]}" != $carrier_skip ] && [ "${ids[$i]}" != autoframe ] && [ "${ids[$i]}" != hdr2023 ] && add "${ids[$i]}"
+        [ "${cat[$i]}" = "$n" ] && [ "${avail[$i]}" = 1 ] && [ "${ids[$i]}" != $carrier_skip ] && [ "${ids[$i]}" != autoframe ] && [ "${ids[$i]}" != hdr2023 ] && [ "${ids[$i]}" != chargewatts ] && add "${ids[$i]}"
       done
       continue
     fi
