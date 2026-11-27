@@ -121,14 +121,15 @@ desc=("AirDrop: Quick Share > Share with Apple devices (S24 Wi-Fi driver + Googl
       "Battery health page: Settings > Battery > Battery information shows health and cycles"
       "Extra settings: louder VoIP calls (and Auto power on/off on Chinese models)"
       "HideKSU: hide the KernelSU root manager from apps, so root-aware apps like CRED stop crashing (patched services.jar; 12 MB download; needs the KernelSU manager installed)"
+      "Watch battery fix: Play services stops retrying a Galaxy Watch every few seconds while it's away or not answering (needs the AirDrop download; untested)"
       "Call recording in the Samsung Phone app"
       "India carrier config for Airtel/Jio SIMs: 'Use 5G standalone networks' switch, call recording, Smart IVR, message cards, plus Samsung Wallet India (UPI, DigiLocker, transit) and the 6 GHz hotspot by reporting the phone as the Indian model; reverts on reboot, the sales code on disk is untouched"
       "Dual SIM 5G: 5G standalone on both SIMs at once instead of only the data SIM (adds your SIMs' country to the modem's 5G+5G list; stays until un-picked; the original is backed up first)"
       "Network mode: 'LTE only' and '5G only' for both SIMs (Settings > Connections > Mobile networks > Network mode; 5G only means standalone 5G, with no signal where there is none)"
       "India: no 'R' roaming icon on national roaming (an Airtel or Jio SIM from another circle counts as home; roaming abroad still shows)"
       "Gboard Rambler: the Pixel 10/11's Gemini voice typing that drops filler words and takes spoken edits (Gboard settings > Voice typing > Dictation type > Rambler)")
-avail=($can_airdrop $can_airdrop 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 $can_ct 1 1 1 1 1 1 $can_lc 1 1 1 $can_ksu $can_rec $can_csc 1 1 1 1)
-why=("$why_airdrop" "$why_airdrop" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "$why_ct" "" "" "" "" "" "" "$why_lc" "" "" "" "$why_ksu" "$why_rec" "$why_csc" "" "" "" "")
+avail=($can_airdrop $can_airdrop 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 $can_ct 1 1 1 1 1 1 $can_lc 1 1 1 $can_ksu 1 $can_rec $can_csc 1 1 1 1)
+why=("$why_airdrop" "$why_airdrop" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "$why_ct" "" "" "" "" "" "" "$why_lc" "" "" "" "$why_ksu" "" "$why_rec" "$why_csc" "" "" "" "")
 
 # pre-release builds lived in /data/local/tmp/s23tweaks: carry the picks and the Play services backup over
 sh_ "su -c '[ -d /data/local/tmp/s23tweaks ] && [ ! -e $PHONE_DIR/choices ] && mkdir -p $PHONE_DIR && cp -r /data/local/tmp/s23tweaks/choices /data/local/tmp/s23tweaks/backup $PHONE_DIR/ 2>/dev/null; true'" >/dev/null
