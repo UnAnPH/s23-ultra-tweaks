@@ -2,3 +2,4 @@ out/
 device/airdrop/
 *.ko
 __pycache__/
+*.pyc

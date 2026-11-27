@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **New: `uhd60lenses`, 4K60 on all lenses in standard Video.** Samsung's `camera-feature.xml` keeps `BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_60FPS` at `seamless-zoom-support="false"`, so in UHD 60 the camera falls back to a remosaic crop and the 0.6×/1×/3×/10× lens buttons vanish. The tweak flips that one attribute in the phone's own file and binds it, exactly the change the camcorder-feature hook in the S23 Ultimate LSPosed module makes; the related feature tags are already true on the supported firmware. No download, and it reverts on reboot. It is part of the **Camera Tweaks** bundle. Verified on an S23 Ultra. (PR #38, by FoxxoOwO.)
+
 ## v1.8.10
 
 - **New tweak `wearretry`: Watch battery fix** (untested on a real disconnect). With a Galaxy Watch, the phone could drain overnight while the watch was on the wrist and charged. The watch answered over Bluetooth but not with its Wear OS service, as after a restart before it's unlocked, so Play services kept retrying the connection with a wakelock each time. When the watch drops off, Samsung's watch plugin tells Play services to stop retrying (strategy OFF). Play services overrides OFF to LOW_POWER unless its flag `enable_off_retry_strategy` is on, and every plugin call also resets the retry backoff to a few seconds. The tweak turns the flag on, in Play services' database and its live Wear config; the plugin asks for fast retries again when the watch is back. Unpicking it, or *Remove Play services flags*, takes the flag out. It needs the AirDrop download, whose sqlite3 edits the database.

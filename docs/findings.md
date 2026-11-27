@@ -44,8 +44,10 @@ does, the removal is harmless on this firmware.
 The camera isn't the only place where the firmware leaves out something the S23 can do. One UI 9 still
 ships Director's view, which the S23 had in 2023, but hides it. The S23's camera already records 10-bit;
 Log video only needs Samsung's switches turned on. Samsung compiled the S23's Settings to hide the
-Adaptive color tone switch. Not every gap is like this: Samsung's models for the AI weather wallpaper
-and Call Screening's AI summary are built for other NPUs, not the S23's
+Adaptive color tone switch. Not every gap is like this: Samsung's model for the AI weather wallpaper
+is built for newer NPUs, not the S23's (and Call Screening's on-device LLM failed in an initial NPU
+test, though the maintainer later reported the AI summary working with Language Core 4.0.01.24; AI
+replies remain untested)
 ([weather wallpaper](#ai-weather-wallpaper-what-samsungs-pipeline-expects),
 [Call Screening](#call-screening-one-ui-9-phone-app-on-the-s23)).
 
@@ -229,8 +231,10 @@ VisionModel 200517500.
 
 ## Call Screening (One UI 9 Phone app on the S23)
 
-**Status: partly working, tested on a live call on 2026-11-23.** Screening works; the AI summary and the
-AI replies to the caller don't, and can't with Samsung's model.
+**Status: screening, greeting, voice messages and AI summary work; AI replies untested.** An initial
+live-call test on 2026-11-23 failed the summary and AI replies on the NPU (V81 vs. V73, logged below);
+the maintainer later confirmed the AI summary works with Language Core 4.0.01.24 (MD5
+`994620f3071706391d17ff132ea16c42`), while AI replies remain untested.
 
 | Part | Status |
 |---|---|
@@ -238,8 +242,8 @@ AI replies to the caller don't, and can't with Samsung's model.
 | Screen call button on incoming calls | Works |
 | Greeting read to the caller (TTS, Hindi tested) | Works |
 | Recording the caller / voice message | Works |
-| Caller name and purpose summary | Fails: "Something went wrong while summarizing this call." |
-| AI-generated replies to the caller | Fail (`FAILED_SLC_PROCESS_KILLED`); screening carries on without them |
+| Caller name and purpose summary | Works with Language Core 4.0.01.24 (earlier test failed with "Something went wrong while summarizing this call.") |
+| AI-generated replies to the caller | Untested (failed with `FAILED_SLC_PROCESS_KILLED` in the earlier test; screening carries on without them) |
 
 ### How it was enabled
 

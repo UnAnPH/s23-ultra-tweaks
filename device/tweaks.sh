@@ -24,7 +24,7 @@
 #         camerahdr hdr2023 audioeraser colortone galaxyai highlights camextras autoframe settingssearch bargein
 #         callscreen tenbit hideksu weather wideflash
 #         prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage
-#         anamorphic profps dual5g nronly natroam rambler wearretry  (see README.md; the categories they're grouped in are in install.sh and the WebUI)
+#         anamorphic profps uhd60lenses dual5g nronly natroam rambler wearretry  (see README.md; the categories they're grouped in are in install.sh and the WebUI)
 #
 # Nothing here writes to a partition. Every change is a module load, an overlay, a bind mount or a
 # runtime setting, so a reboot always returns the phone to stock. The files themselves stay on storage
@@ -51,7 +51,7 @@ mkdir -p $V; L=$V/tweaks.log; R=$V/run
 [ -f $D/module.prop ] && MODULE=1 || MODULE=0
 APPLY_LOCK=/dev/s23tweaks_apply.lock         # /dev is tmpfs: locks never survive a reboot
 STAYS_TILL_REBOOT="airdrop wifi7 battery india callrec vulkan audioeraser hdr2023 colortone highlights tenbit galaxyai settingssearch hideksu profps"
-TWEAK_IDS="airdrop battery features wearretry callrec india hotspot6g wifi7 display logvideo vulkan camerahdr hdr2023 audioeraser colortone galaxyai highlights camextras autoframe settingssearch bargein callscreen tenbit hideksu weather wideflash prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage anamorphic profps dual5g nronly natroam rambler"
+TWEAK_IDS="airdrop battery features wearretry callrec india hotspot6g wifi7 display logvideo vulkan camerahdr hdr2023 audioeraser colortone galaxyai highlights camextras autoframe settingssearch bargein callscreen tenbit hideksu weather wideflash prowbtint zoomrocker videosoftening afcontrol aelimit slowmoaf extstorage anamorphic profps uhd60lenses dual5g nronly natroam rambler"
 GMS_MIN=261125000                            # Play services 26.11, the first with Mosey support
 # Firmware the AirDrop/Wi-Fi 7 kernel modules are checked against (one line each, read by customize.sh).
 # All are One UI 9 build GZIF on GKI kernel 34343818, and their whole Wi-Fi stack (cnss2, mhi, cfg80211,
@@ -825,6 +825,10 @@ ff_apply() {
 #          Slow motion, FHD240 rebuilt) are folded into this tweak: all three need the same Camera
 #          APK patch and camera-feature.xml edit. slowmo4k120's own availability check ran before
 #          camfeat_apply added the 4K120 entry, so a boot apply on stock firmware skipped it.
+#  uhd60lenses: seamless-zoom-support on the stock BACK 3840X2160_60FPS map, so the 0.6x/1x/3x/10x
+#               lens buttons remain available in UHD 60 Video instead of a remosaic-crop fallback.
+#               The related feature tags (SUPPORT_SEAMLESS_ZOOM, the three 60 fps lens tags, the tele
+#               zoom levels) are already true on the S23 Ultra firmware this tweak applies to.
 # Never add SUPPORT_BACK_WIDE_NORMAL_DUAL_PORTRAIT_VIDEO, SUPPORT_BACK_PORTRAIT_VIDEO_TELE_DUAL or
 # CAMERA_SUPPORT_SEAMLESS_PORTRAITVIDEO: on the S23 they crash the camera ("Zoom is not supported").
 CF_LOG='<local name="SUPPORT_LOG_VIDEO" value="true"/>'
@@ -857,9 +861,9 @@ CF_PROFPS='<local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_25FPS" v
 <local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X824_50FPS" value="true" hdr="true" hdr10="true" snapshot-support="true" snapshot-size="4000x1716" vdis="true" super-vdis="false" effect="true" object-tracking="true" seamless-zoom-support="true" physical-zoom-supported="false" external-storage-support="true" touch-af="true" supported-mode="pro_video"/>
 <local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X824_100FPS" value="true" hdr="true" hdr10="false" snapshot-support="false" snapshot-size="4000x1716" vdis="false" super-vdis="false" effect="false" object-tracking="false" seamless-zoom-support="false" physical-zoom-supported="false" external-storage-support="true" supported-mode="pro_video"/>
 <local name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_7680X3296_25FPS" value="true" hdr="true" hdr10="false" snapshot-support="true" snapshot-size="4000x1716" vdis="true" super-vdis="false" effect="false" object-tracking="false" seamless-zoom-support="false" physical-zoom-supported="false" external-storage-support="true" supported-mode="pro_video"/>'
-cf_add=""; cf_slowmo_modes=""
+cf_add=""; cf_slowmo_modes=""; cf_seamless_modes=""
 camfeat_apply() {
-  [ -n "$cf_add" ] || [ -n "${cf_video_modes:-}" ] || [ -n "${cf_slowmo_modes:-}" ] || has extstorage || return 1
+  [ -n "$cf_add" ] || [ -n "${cf_video_modes:-}" ] || [ -n "${cf_slowmo_modes:-}" ] || [ -n "${cf_seamless_modes:-}" ] || has extstorage || return 1
   mkdir -p $R; bound $CF && umount $CF
   grep -q '</resources>' $CF || { log "camera: $CF has no </resources>; camera settings skipped"; return 1; }
   grep -v '</resources>' $CF > $R/cf.new
@@ -884,6 +888,22 @@ camfeat_apply() {
     nl=$(printf '%s' "$nl" | sed 's|value="false"|value="true"|')
     grep -v "name=\"$n\"" $R/cf.new > $R/cf.tmp && mv $R/cf.tmp $R/cf.new
     printf '%s\n' "$nl" >> $R/cf.new
+  done
+  # 4K60 on every lens: stock keeps seamless-zoom-support="false" on the UHD 60 fps map, so the
+  # camera falls back to a remosaic crop and the 0.6x/3x/10x lens buttons disappear in UHD 60.
+  # Flip that one attribute in place (the same change the LSPosed camcorder-map hook makes) and keep
+  # all the stock attributes untouched.
+  for n in ${cf_seamless_modes:-}; do
+    o=$(grep -m1 "name=\"$n\"" $R/cf.new || true)
+    [ -n "$o" ] || { log "camera: $n not found in $CF; skipped"; continue; }
+    case "$o" in
+      *seamless-zoom-support=\"true\"*) nl=$o ;;
+      *seamless-zoom-support=\"false\"*) nl=$(printf '%s' "$o" | sed 's/seamless-zoom-support="false"/seamless-zoom-support="true"/') ;;
+      *) nl=$(printf '%s' "$o" | sed 's|/>| seamless-zoom-support="true"/>|') ;;
+    esac
+    grep -v "name=\"$n\"" $R/cf.new > $R/cf.tmp && mv $R/cf.tmp $R/cf.new
+    printf '%s\n' "$nl" >> $R/cf.new
+    log "camera: $n: seamless zoom on (lens switching at UHD 60)"
   done
   # Slow motion: profps adds the 4K120 entry above through cf_add, already with slow_motion in its
   # modes; add slow_motion to the FHD120 entry in place (keeping its position and stock attributes),
@@ -920,7 +940,7 @@ camfeat_apply() {
   mv $R/cf.new $R/camera-feature.xml; chmod 644 $R/camera-feature.xml
   chcon u:object_r:system_file:s0 $R/camera-feature.xml
   mount -o bind,ro $R/camera-feature.xml $CF || fail "camera-feature bind mount"
-  log "camera settings on: $(printf '%s\n' "$cf_add" | sed -n 's/.*name="\([^"]*\)".*/\1/p' | tr '\n' ' ')${cf_video_modes:-}$(has extstorage && echo ' external-storage')"
+  log "camera settings on: $(printf '%s\n' "$cf_add" | sed -n 's/.*name="\([^"]*\)".*/\1/p' | tr '\n' ' ')${cf_video_modes:-}${cf_seamless_modes:-}$(has extstorage && echo ' external-storage')"
   am force-stop com.sec.android.app.camera 2>/dev/null   # make the camera re-read the file, as the adb rebuild does
 }
 
@@ -2406,8 +2426,8 @@ why_not() {
   case $1 in
     airdrop|wifi7)
       kernel_supported || { echo "needs firmware $(echo $AIRDROP_FW | sed 's/ /, /g') (this phone runs $build)"; return; }
-      if [ $1 = airdrop ] && ! kernel_stock && ! cfg80211_stock; then
-        echo "this kernel ships its own Wi-Fi stack (cfg80211.ko built for $(cfg80211_vermagic | grep . || echo "an unknown kernel"), not $AIRDROP_KBASE*), which the S24 Wi-Fi driver can't register with; Wi-Fi 7 and the 6 GHz hotspot still work"; return
+      if ! kernel_stock && ! cfg80211_stock; then
+        echo "this kernel ships its own Wi-Fi stack (cfg80211.ko built for $(cfg80211_vermagic | grep . || echo "an unknown kernel"), not $AIRDROP_KBASE*), which the S24 Wi-Fi driver can't register with; the 6 GHz hotspot still works"; return
       fi
       [ "${gms:-0}" -ge $GMS_MIN ] || echo "needs Google Play services 26.11 or newer" ;;
     callrec|india)
@@ -2436,7 +2456,7 @@ why_not() {
         { echo "this phone's /system/framework/services.jar (md5 $m) isn't one a patch was made from ($(echo "$HIDEKSU_JARS" | cut -d' ' -f3- | tr '\n' ',' | sed 's/,$//; s/,/, /g')); tools/hideksupatch.sh can make one"; return; }
       pm path me.weishu.kernelsu >/dev/null 2>&1 || echo "the KernelSU manager (me.weishu.kernelsu) isn't installed, so there's nothing to hide" ;;
     hdr2023) for f in $H23_LIBS; do [ -f /system/lib64/$f ] || { echo "this phone has no /system/lib64/$f to replace"; return; }; done ;;
-    logvideo|camextras|wideflash|prowbtint|zoomrocker|slowmoaf|extstorage|anamorphic) grep -q '</resources>' $CF 2>/dev/null || echo "this firmware's $CF can't be edited" ;;
+    logvideo|camextras|wideflash|prowbtint|zoomrocker|slowmoaf|extstorage|anamorphic|uhd60lenses) grep -q '</resources>' $CF 2>/dev/null || echo "this firmware's $CF can't be edited" ;;
     profps) grep -q '</resources>' $CF 2>/dev/null || echo "this firmware's $CF can't be edited" ;;
     galaxyai)
       for p in $GAI_APPS; do [ -f /system/$p/${p#*/}.apk ] || { echo "this phone has no /system/$p/${p#*/}.apk to replace"; return; }; done ;;
@@ -2492,6 +2512,7 @@ is_on() {
         if [ -n "$1" ] && pm path com.sec.android.app.camera 2>/dev/null | grep -q "^package:$CAM_APK$"; then
           bound $CAM_APK && grep -q 'name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_24FPS".*supported-mode="[^"]*video' $CF 2>/dev/null
         else true; fi; } ;;
+    uhd60lenses) bound $CF && grep -q 'name="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_60FPS".*seamless-zoom-support="true"' $CF 2>/dev/null ;;
     autoframe) grep -q "<SEC_FLOATING_FEATURE_CAMERA_CONFIG_AUTOFRAMING>uhd<" $FF 2>/dev/null ;;
     bargein) grep -q "<SEC_FLOATING_FEATURE_BIXBY_CONFIG_BARGEIN_PARAM_MODE>2<" $FF 2>/dev/null ;;
     wearretry) wr_live ;;
@@ -2537,6 +2558,11 @@ apply)
     w=$(why_not $x); if [ -n "$w" ]; then log "$x: skipped: $w"; else keep="$keep $x"; fi
   done
   TWEAKS=" $keep "
+  if has wifi7 && ! has airdrop; then
+    keep=$(echo "$keep" | sed 's/ wifi7//g; s/^wifi7 //; s/^wifi7$//')
+    TWEAKS=" $keep "
+    log "wifi7: skipped: needs airdrop (the S24 Wi-Fi driver)"
+  fi
   # what an apply doesn't undo (binds, kernel modules, properties) stays until a reboot: say so
   for x in $STAYS_TILL_REBOOT; do
     has $x && continue
@@ -2589,6 +2615,7 @@ $CF_ANAMORPHIC_SCALER"
   has profps && cf_add="$cf_add
 $CF_PROFPS"
   has profps && cf_slowmo_modes="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_120FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_120FPS"
+  has uhd60lenses && cf_seamless_modes="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_60FPS"
   has profps && cf_video_modes="BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_24FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_24FPS BACK_CAMCORDER_RESOLUTION_FEATURE_MAP_7680X4320_24FPS FRONT_CAMCORDER_RESOLUTION_FEATURE_MAP_3840X2160_24FPS FRONT_CAMCORDER_RESOLUTION_FEATURE_MAP_1920X1080_24FPS"
   camfeat_apply && restart=1
   has profps && cam24fps_bind   # XML-only when the Camera APK isn't one the patch knows; the log says what was skipped
@@ -2676,7 +2703,7 @@ probe)
   ver=$( [ $MODULE = 1 ] && grep -m1 '^version=' $D/module.prop | cut -d= -f2 || echo script)
   j() { w=$(why_not $1); printf '{"id":"%s","available":%s,"why":"%s","active":%s}' "$1" \
           "$( [ -z "$w" ] && echo true || echo false)" "$w" "$(is_on $1 && echo true || echo false)"; }
-  sim=$(getprop gsm.sim.operator.numeric | cut -d, -f1)   # MCC+MNC of the first SIM; 404/405 = India
+  sim=$(getprop gsm.sim.operator.numeric | cut -d, -f1)   # MCC+MNC of the first SIM; 404/405/406 = India
   printf '{"version":"%s","module":%s,"phone":{"model":"%s","firmware":"%s","csc":"%s","android":"%s","kernel":"%s","gms":%s,"sim":"%s"},' \
     "$ver" "$( [ $MODULE = 1 ] && echo true || echo false)" "$model" "$build" "$csc" "$android" "$kern" "${gms:-0}" "$sim"
   printf '"picked":"%s","autostart":%s,"applying":%s,"tweaks":[' "$(migrate_choices "$(cat $V/choices 2>/dev/null)")" \
@@ -2751,6 +2778,7 @@ status)
   echo "extstorage: $(is_on extstorage && echo on || echo off)"
   echo "anamorphic: $(is_on anamorphic && echo on || echo off)"
   echo "profps: $(is_on profps && echo on || echo off), Camera $(bound $CAM_APK && echo patched || echo stock), 10x $(cam24_profps_on && echo "unhidden at 25/48/50 fps" || echo hidden)"
+  echo "uhd60lenses: $(is_on uhd60lenses && echo "on (0.6x/1x/3x/10x at UHD 60)" || echo off)"
   echo "audioeraser: $([ -f /system/etc/fastScanner.tflite ] && echo on || echo off), engine $(same_size /system/lib64/$VE $PL/audioeraser/$VE && echo S24 || echo stock)"
   echo "colortone: Settings $(bound $SETTINGS && echo patched || echo stock), service $([ -f /system/priv-app/$EAD/$EAD.apk ] && echo on || echo off)"
   echo "galaxyai: $(for p in $GAI_APPS; do n=${p#*/}; printf '%s=%s ' $n "$(same_size /system/$p/$n.apk $PL/galaxyai/$n.apk && echo S24 || echo stock)"; done)C2PA=$(same_size $C2PA $D/files/libC2paDps-shim.so && echo shim || echo stock)"

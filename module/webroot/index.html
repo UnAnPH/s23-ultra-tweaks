@@ -293,7 +293,7 @@ details .inner { padding: 0 16px 14px; }
 
     <div class="apply-bar">
       <button class="btn primary block" id="apply" type="button">Apply</button>
-      <p class="hint">A reboot undoes everything except Call screening (an app install) and Director's view (a camera setting); with “Apply at every boot” on, the rest comes back about a minute after boot.</p>
+      <p class="hint">A reboot undoes everything except persistent tweaks (Call screening, Dual SIM 5G, Lock screen weather effect, Director's view, No national roaming, Gboard Rambler, Watch battery fix and AirDrop's Play services flags — all undone when un-picked or removed); with “Apply at every boot” on, the rest comes back about a minute after boot.</p>
     </div>
 
     <section class="card" aria-labelledby="h-status">
@@ -379,6 +379,7 @@ const TWEAKS = [
   { id: "extstorage", cat: "camera", name: "Record to USB-C storage", desc: "Records straight to a USB-C SSD or drive in every video mode (4K60, 4K60 21:9, 8K, FHD120)" },
   { id: "anamorphic", cat: "camera", name: "Anamorphic desqueeze", desc: "Camera Assistant's anamorphic lens desqueeze (1.33× / 1.55× / 2.0×) for anamorphic lenses" },
   { id: "profps", cat: "camera", name: "Frame-rate unlocks", desc: "24 fps in standard Video (FHD, UHD and 8K, rear and front); Pro video 4K/21:9 25/48/50/100/120, FHD 25/48/50/100 and 8K 25, with the 10× super tele unhidden at 25/48/50 on the patched Camera; and Slow motion 4K120/FHD120 with the FHD240 entry rebuilt. The Pro rates and Slow motion are XML-only; 24 fps and the 10× need a stock Samsung Camera the patch knows, so with a Galaxy Store update or an unknown Camera those two are skipped and the rest still applies." },
+  { id: "uhd60lenses", cat: "camera", name: "4K60 on all lenses", desc: "Keeps the 0.6×, 1×, 3× and 10× lens buttons available in standard Video at UHD 60 fps: flips seamless-zoom-support on that resolution's entry in camera-feature.xml instead of falling back to a remosaic crop." },
   { id: "display", cat: "display", name: "Full-screen AOD", desc: "The lock screen wallpaper on Always On Display, and AOD brightness that follows the room light" },
   { id: "colortone", cat: "display", name: "Adaptive color tone", desc: "Display colour follows the room light, as on the S24 (1 MB download)" },
   { id: "vulkan", cat: "display", name: "Vulkan rendering", desc: "Apps draw with Vulkan instead of OpenGL, as on the S24. Can make some lock screen animations (stretchable clocks) stutter more; unpick it if so." },
@@ -387,13 +388,13 @@ const TWEAKS = [
   { id: "highlights", cat: "ai", name: "Notification highlights", desc: "Galaxy AI sorts important notifications to the top of the panel and summarizes long or repeated chats, on the phone. It also reveals the page (Settings > Notifications > Advanced settings > Notification highlights) that this build hides, so you can see both switches; summaries need a Samsung account, Language Core and one of the listed messaging apps, and appear while the screen is off." },
   { id: "audioeraser", cat: "ai", name: "Audio Eraser", desc: "Remove wind, noise, music or voices from videos in Gallery (34 MB download)" },
   { id: "settingssearch", cat: "ai", name: "Settings search", desc: "The S24's new Settings search bar; natural-language answers stay off (10 MB download)" },
-  { id: "callscreen", cat: "ai", name: "Call screening", desc: "Installs Samsung Language Core: screening and voice messages work, the AI summary and replies don't. Stays after a reboot (3.1 GB download; Wi-Fi recommended)" },
+  { id: "callscreen", cat: "ai", name: "Call screening", desc: "Installs Samsung Language Core: screening, greeting, voice messages and the AI summary work; AI replies are untested. Stays after a reboot (3.1 GB download; Wi-Fi recommended)" },
   { id: "bargein", cat: "ai", name: "Bixby barge-in", desc: "Talk over Bixby while it answers, as on the S24 (untested)" },
   { id: "rambler", cat: "ai", name: "Gboard Rambler", desc: "The Pixel 10 and 11's Rambler voice typing in Gboard: Gemini turns natural speech into clean text, drops filler words and takes spoken edits (\u201cchange blue to green\u201d). Sets Gboard's own local flag overrides, the same set PixelBoard uses; needs Gboard 18 and an internet connection, and Google may limit daily use. Undo: un-pick it and apply." },
   { id: "battery", cat: "system", name: "Battery health", desc: "Settings → Battery → Battery information shows health and cycle count" },
   { id: "features", cat: "system", name: "Power schedule and louder calls", desc: "Louder VoIP calls; the Auto power on/off schedule shows only on Chinese (CN) models" },
   { id: "wearretry", cat: "system", name: "Watch battery fix", desc: "Play services stops retrying a Galaxy Watch every few seconds while the watch is away or not answering, which can drain the phone overnight. Needs AirDrop's download (untested)" },
-  { id: "hideksu", cat: "system", name: "HideKSU", desc: "Hide the KernelSU root manager from apps, so root-aware apps (CRED, banking) stop crashing. The launcher icon and DFRoot's boot root keep working (patched services.jar; needs the KernelSU manager installed; 12 MB download). Also hides the module's own mounts from the apps you list in /data/adb/s23tweaks/hide-apps.txt, so mount-scanning detectors don't see the tweaks" },
+  { id: "hideksu", cat: "system", name: "HideKSU", desc: "Hide the KernelSU root manager from apps, so root-aware apps (CRED, banking) stop crashing. The launcher icon and DFRoot's boot root keep working (patched services.jar; needs the KernelSU manager installed; 12 MB download). Also hides the module's own mounts from user-installed apps automatically (keeping them for preinstalled system/Samsung apps; optional overrides in /data/adb/s23tweaks/hide-apps.txt), so mount-scanning detectors don't see the tweaks" },
   { id: "callrec", cat: "carrier", name: "Call recording", desc: "Call recording in the Samsung Phone app" },
   { id: "india", cat: "carrier", name: "India carrier config (Airtel, Jio)", desc: "For Indian SIMs: the Indian carrier settings with the Use 5G standalone networks switch, call recording, Smart IVR and message cards, plus Samsung Wallet India (UPI, DigiLocker, transit) and the 6 GHz hotspot — it reports the phone as the Indian model while on (reverts on reboot; the sales code on disk is untouched, adding bank cards may still fail)" },
   { id: "dual5g", cat: "carrier", name: "Dual SIM 5G", desc: "5G standalone on both SIMs at once, instead of only the one set for mobile data. Adds your SIMs' country to the modem's 5G+5G list (Samsung allows it only in China and Costa Rica). This one stays after a reboot until you un-pick it; the original modem file is backed up first, to Download/s23tweaks-modem-backup. The modem restarts once (~15 s without signal)." },
@@ -404,8 +405,8 @@ const TWEAKS = [
 // independent in tweaks.sh and in the saved picks; the page only groups them.
 const BUNDLES = [
   { id: "cameratweaks", cat: "camera", name: "Camera Tweaks",
-    ids: ["wideflash", "prowbtint", "zoomrocker", "videosoftening", "afcontrol", "aelimit", "slowmoaf", "extstorage", "anamorphic", "profps"],
-    desc: "Everything we added to the camera, in one switch: frame-rate unlocks (24 FPS in standard Video on rear and front, the extra Pro video rates with the 10× at 25/48/50 on the patched Camera, and 4K120/FHD120 in Slow motion with the FHD240 entry rebuilt), flash and torch on the 0.6× ultrawide, white-balance tint, Video zoom rocker, Camera Assistant's video softening, AF speed/sensitivity, auto exposure limit and anamorphic desqueeze, touch focus in Slow motion and USB-C recording." },
+    ids: ["wideflash", "prowbtint", "zoomrocker", "videosoftening", "afcontrol", "aelimit", "slowmoaf", "extstorage", "anamorphic", "profps", "uhd60lenses"],
+    desc: "Everything we added to the camera, in one switch: frame-rate unlocks (24 FPS in standard Video on rear and front, the extra Pro video rates with the 10× at 25/48/50 on the patched Camera, and 4K120/FHD120 in Slow motion with the FHD240 entry rebuilt), 4K60 on all lenses in Video, flash and torch on the 0.6× ultrawide, white-balance tint, Video zoom rocker, Camera Assistant's video softening, AF speed/sensitivity, auto exposure limit and anamorphic desqueeze, touch focus in Slow motion and USB-C recording." },
 ];
 const BUNDLE_OF = {};
 for (const b of BUNDLES) for (const id of b.ids) BUNDLE_OF[id] = b;
@@ -435,6 +436,7 @@ const WHERE = {
   hdr2023: ["2023 ArcSoft HDR", "Nothing to set. Bracketed HDR (backlit scenes) is tested; hybrid HDR (ordinary daylight) loads but is untested. If photos look wrong, turn it off."],
   tenbit: ["Front-camera 10-bit", "Nothing to set. Apps that offer 10-bit or HDR video (HLG) now offer it on the selfie camera too; Samsung Camera already had its own."],
   profps: ["Frame-rate unlocks", "Camera → Video → resolution/FPS: 24 fps on FHD, UHD and 8K (rear and front). Pro video: 4K/21:9 25/48/50/100/120, FHD 25/48/50/100, 8K 25; the 10× tele appears at 25/48/50 on S918BXXUAGZIF with the patched Camera, elsewhere it stays hidden. Slow motion: 4K120 and FHD120, with the FHD240 menu entry rebuilt."],
+  uhd60lenses: ["4K60 on all lenses", "Camera → Video → UHD 60 fps. The 0.6×, 1×, 3× and 10× lens buttons stay available (no remosaic crop fallback)."],
   wideflash: ["Flash on ultrawide", "Camera → Photo: flash on; Video: torch on. Camera Assistant now shows the ultrawide flash option."],
   cameratweaks: ["Camera Tweaks", "24 fps: Camera → Video → resolution/FPS. Ultrawide flash: Photo flash / Video torch. Tint: Pro or Pro video → white balance. Zoom rocker: Video zoom. 4K120: Slow motion → 4K120 (Log needs the Log video tweak). Camera Assistant: video softening, AF speed/sensitivity, auto exposure limit and anamorphic desqueeze. Touch focus: Slow motion. USB-C: Camera → Settings → Storage. Pro rates: Camera → More → Pro video."],
   videosoftening: ["Video softening", "Camera → Settings → Camera Assistant → Video softening (Off / Medium / High)."],
@@ -445,7 +447,7 @@ const WHERE = {
   anamorphic: ["Anamorphic desqueeze", "Camera → Settings → Camera Assistant → Anamorphic lens desqueeze."],
   autoframe: ["4K auto framing", "Reported to make the camera fail (S918B). Video at UHD with Auto framing on; turn it off if the camera fails to open."],
   settingssearch: ["Settings search", "Open Settings and tap the search bar."],
-  callscreen: ["Call screening", "Phone → Settings → Call screening. On the S23 the AI summary shows an error; screening and voice messages work."],
+  callscreen: ["Call screening", "Phone → Settings → Call screening. Screening, greeting, voice messages and the AI summary work (with Language Core 4.0.01.24); AI replies are untested."],
   rambler: ["Gboard Rambler", "Gboard settings → Voice typing → Dictation type → Rambler, then tap the mic on the keyboard."],
   bargein: ["Bixby barge-in", "Untested: start talking while Bixby is answering."],
   wearretry: ["Watch battery fix", "Untested: nothing to do. If the watch stops reconnecting after it's been away, unpick this."],
@@ -1018,7 +1020,7 @@ async function onWifi7Page(e) {
 
 async function onUnflag(e) {
   const body = h("div", {},
-    h("p", { text: "This removes the two Google Play services flag overrides that AirDrop adds. It undoes part of AirDrop: Share with Apple devices stops working until AirDrop is applied again." }),
+    h("p", { text: "This removes the Google Play services flag overrides that AirDrop adds. It undoes part of AirDrop: Share with Apple devices stops working until AirDrop is applied again." }),
     h("p", { text: "It's only needed when you're removing the module for good. A reboot already undoes everything else. Play services restarts." }));
   if (!(await confirmDialog({ title: "Remove Play services flags?", body, ok: "Remove", danger: true }))) return;
   const b = e.target; b.disabled = true; b.textContent = "Removing…";
@@ -1178,9 +1180,10 @@ function installMock() {
     if (has("extstorage")) add(0.2, "extstorage: USB-C storage enabled in every video resolution");
     if (has("anamorphic")) add(0.3, "anamorphic: Camera Assistant > anamorphic lens desqueeze on");
     if (has("profps")) add(0.4, "profps: 24 fps in standard Video, extra Pro video rates and 4K120/FHD120 Slow motion on (FHD240 menu entry rebuilt)");
+    if (has("uhd60lenses")) add(0.2, "uhd60lenses: seamless zoom on the UHD 60 fps map, all lens buttons stay available");
     if (has("vulkan")) add(0.3, "vulkan: apps render with Skia on Vulkan");
     if (has("weather")) add(0.3, "feature flags on: LOCKSCREEN_CONFIG_WALLPAPER_STYLE");
-    if (["airdrop", "battery", "features", "callrec", "india", "display", "logvideo", "vulkan", "camerahdr", "hdr2023", "audioeraser", "colortone", "galaxyai", "weather", "wideflash", "prowbtint", "zoomrocker", "videosoftening", "afcontrol", "aelimit", "slowmoaf", "extstorage", "anamorphic", "profps"].some(has)) { add(0.4, "restarting the Android framework (screen goes black for ~30 s)"); add(3.0, "framework back"); }
+    if (["airdrop", "battery", "features", "callrec", "india", "display", "logvideo", "vulkan", "camerahdr", "hdr2023", "audioeraser", "colortone", "galaxyai", "weather", "wideflash", "prowbtint", "zoomrocker", "videosoftening", "afcontrol", "aelimit", "slowmoaf", "extstorage", "anamorphic", "profps", "uhd60lenses"].some(has)) { add(0.4, "restarting the Android framework (screen goes black for ~30 s)"); add(3.0, "framework back"); }
     if (has("hotspot6g")) add(0.5, "hotspot6g: Mobile hotspot > Band now offers 6 GHz (needs WPA3); country unchanged, Samsung Wallet unaffected");
     if (has("weather")) add(0.6, "weather: on; pick it in the lock screen editor (Wallpaper and style > Lock screen > Weather)");
     if (has("airdrop")) { add(0.4, "airdrop: mosey_server running"); add(0.4, "airdrop: Play services Nearby flags on (2 of 2 overrides present)"); }
@@ -1213,7 +1216,7 @@ function installMock() {
     return JSON.stringify({ version: "v1.8.5", module: true,
       phone: { model: "SM-S918W", firmware: "S918WVLU8GZIF", csc: "XAC", android: "17", kernel: "5.15.197-android13-8-34343818-abS918WVLU8GZIF", gms: 264531035, sim: new URLSearchParams(location.search).get("sim") || "40445" },
       picked: st.picked, autostart: st.autostart, applying: !!st.run,
-      tweaks: [tw("airdrop"), tw("battery"), tw("features"), tw("wearretry"), tw("callrec"), tw("india"), tw("hotspot6g"), tw("wifi7", w7 ? "" : "needs firmware S918WVLU8GZIF (this phone runs S918WVLU7GZE1)"), tw("display"), tw("logvideo"), tw("vulkan"), tw("camerahdr"), tw("hdr2023"), tw("audioeraser"), tw("colortone"), tw("galaxyai"), tw("highlights"), tw("camextras"), tw("autoframe"), tw("settingssearch"), tw("bargein"), tw("tenbit"), tw("hideksu"), tw("weather"), tw("wideflash"), tw("prowbtint"), tw("zoomrocker"), tw("videosoftening"), tw("afcontrol"), tw("aelimit"), tw("slowmoaf"), tw("extstorage"), tw("anamorphic"), tw("profps"), tw("callscreen", "needs the Language Core 4.0.01.24 APK (3.1 GB) in /data/adb/s23tweaks/dl/languagecore-4.0.01.24.apk; see the README"), tw("dual5g"), tw("nronly"), tw("natroam"), tw("rambler")] });
+      tweaks: [tw("airdrop"), tw("battery"), tw("features"), tw("wearretry"), tw("callrec"), tw("india"), tw("hotspot6g"), tw("wifi7", w7 ? "" : "needs firmware S918WVLU8GZIF (this phone runs S918WVLU7GZE1)"), tw("display"), tw("logvideo"), tw("vulkan"), tw("camerahdr"), tw("hdr2023"), tw("audioeraser"), tw("colortone"), tw("galaxyai"), tw("highlights"), tw("camextras"), tw("autoframe"), tw("settingssearch"), tw("bargein"), tw("tenbit"), tw("hideksu"), tw("weather"), tw("wideflash"), tw("prowbtint"), tw("zoomrocker"), tw("videosoftening"), tw("afcontrol"), tw("aelimit"), tw("slowmoaf"), tw("extstorage"), tw("anamorphic"), tw("profps"), tw("uhd60lenses"), tw("callscreen", "needs the Language Core 4.0.01.24 APK (3.1 GB) in /data/adb/s23tweaks/dl/languagecore-4.0.01.24.apk; see the README"), tw("dual5g"), tw("nronly"), tw("natroam"), tw("rambler")] });
   }
   function handle(cmd) {
     tick();
