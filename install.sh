@@ -69,9 +69,9 @@ jar_md5=$(sh_ md5sum /system/framework/services.jar 2>/dev/null | cut -d' ' -f1)
 can_ksu=0; why_ksu="this phone's services.jar isn't one a patch was made from (S918W S918WVLU8GZIF, S918B INS, S918U1)"
 case " $HKS_MD5 " in *" ${jar_md5:-none} "*) can_ksu=1; why_ksu="" ;; esac
 # chargewatts patches SystemUI.apk: stock and patched md5s as in CW_ROWS (device/tweaks.sh)
-CW_MD5="adcea3e330bb75ab20c8a3602d5a3a65 1b209734db41e94efb6e2b7d4f37d442"
+CW_MD5="adcea3e330bb75ab20c8a3602d5a3a65 1b209734db41e94efb6e2b7d4f37d442 fbd2cd7e81ccce52bf1f4720f973ddb7 0b8e71af3de1a091bb7dab481f812e86"
 sysui_md5=$(sh_ md5sum /system_ext/priv-app/SystemUI/SystemUI.apk 2>/dev/null | cut -d' ' -f1)
-can_cw=0; why_cw="this phone's SystemUI.apk (md5 ${sysui_md5:-unknown}) isn't one a patch was made from (so far S918WVLU8GZIF's)"
+can_cw=0; why_cw="this phone's SystemUI.apk (md5 ${sysui_md5:-unknown}) isn't one a patch was made from (so far S918WVLU8GZIF's and S918BXXUAGZIF's)"
 case " $CW_MD5 " in *" ${sysui_md5:-none} "*) can_cw=1; why_cw="" ;; esac
 # an Indian SIM (MCC 404/405/406) makes the carrier picks take the India config instead of plain call recording
 sim=$(sh_ getprop gsm.sim.operator.numeric | cut -d, -f1); sim_india=0; carrier_skip=india

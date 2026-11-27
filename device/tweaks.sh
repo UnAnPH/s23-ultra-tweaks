@@ -114,7 +114,8 @@ galaxyai galaxyai-S918WVLU8GZIF.tar.gz 5619aaee7580b985df300dcfca1fadc56bc774f60
 settingssearch settingssearch-S918WVLU8GZIF.tar.gz bddfa32a08def256b7497730a0e7faecf7b1621655ce0cc85bec423843357042
 callscreen callscreen-S918WVLU8GZIF.tar.partaa 6a8d141557050e738b3a805d741463aae46b9322732bdd3039d836c0d116af9a
 callscreen callscreen-S918WVLU8GZIF.tar.partab 3335ea84794746040513e4297175736d792a19f378187d7b970c4058bc421025
-chargewatts:adcea3e330bb75ab20c8a3602d5a3a65 chargewatts-S918WVLU8GZIF.tar.gz 27e8a810f7a7ba6570a2aff32c4d592cd165f99fff4f9d21abffb0e3958933e1"
+chargewatts:adcea3e330bb75ab20c8a3602d5a3a65 chargewatts-S918WVLU8GZIF.tar.gz 27e8a810f7a7ba6570a2aff32c4d592cd165f99fff4f9d21abffb0e3958933e1
+chargewatts:fbd2cd7e81ccce52bf1f4720f973ddb7 chargewatts-S918BXXUAGZIF.tar.gz 84fc7b926cada3bc201708bf1b1ff5823984bd46d8677f28fb46d14f004cc197"
 SETTINGS=/system/priv-app/SecSettings/SecSettings.apk
 # colortone: firmware, md5 of its SecSettings.apk, md5 with files/SecSettings-ead-<firmware>.patch applied
 # (tools/eadpatch.py makes the patch and prints both for another firmware's APK)
@@ -2251,7 +2252,9 @@ hideksu_on() {
 SYSUI=/system_ext/priv-app/SystemUI/SystemUI.apk
 AOD_PKG=com.samsung.android.app.aodservice
 CW_ROWS="systemui adcea3e330bb75ab20c8a3602d5a3a65 1b209734db41e94efb6e2b7d4f37d442 62025728 S918WVLU8GZIF
-aod 8765be536661cd4f6f8c2e29a6006766 b0f8f1c4d9935eb882f7a7ee74bb8b2c 52326400 8.9.65.90"
+aod 8765be536661cd4f6f8c2e29a6006766 b0f8f1c4d9935eb882f7a7ee74bb8b2c 52326400 8.9.65.90
+systemui fbd2cd7e81ccce52bf1f4720f973ddb7 0b8e71af3de1a091bb7dab481f812e86 95891456 S918BXXUAGZIF
+aod cb572b0e9e3fcdfd7416af8a116ff4cb 867c469c595b2b42d6888c4d52f8ec07 52326400 8.9.65.90"
 AOD_SYS=/system/priv-app/AODService_v80/AODService_v80.apk
 aod_apk() { pm path $AOD_PKG 2>/dev/null | sed -n 's/^package://p' | head -n 1; }
 cw_rowof() { m=$(md5 "$2"); echo "$CW_ROWS" | awk -v k=$1 -v m="$m" '$1 == k && ($2 == m || $3 == m)'; }   # cw_rowof <kind> <apk>
@@ -2291,7 +2294,7 @@ cw_apply() {
     bound $AOD_SYS && umount -l $AOD_SYS
     log "chargewatts: Always On Display runs a Galaxy Store update ($(dumpsys package $AOD_PKG | sed -n 's/^ *versionName=//p' | head -n 1)); only the built-in copy can be patched, so lock screen only"
   elif [ -z "$(cw_rowof aod $a)" ]; then
-    log "chargewatts: the built-in Always On Display (md5 $(md5 $a)) isn't the one the patch was made for ($(echo "$CW_ROWS" | awk '$1 == "aod" {print $NF}' | tr '\n' ' ' | sed 's/ $//')); lock screen only"
+    log "chargewatts: the built-in Always On Display (md5 $(md5 $a)) isn't the one the patch was made for ($(echo "$CW_ROWS" | awk '$1 == "aod" {print $NF}' | sort -u | tr '\n' ' ' | sed 's/ $//')); lock screen only"
   else cw_bind aod $a AOD; r=$?; [ $r = 0 ] && ch=1; [ $r != 1 ] && aod=1; fi
   [ $ch = 0 ] && [ -f /dev/s23tweaks_cw ] && { log "chargewatts: already on"; return 1; }   # SystemUI restarted after the binds
   cmd package compile -m speed-profile -f com.android.systemui >/dev/null 2>&1 ||

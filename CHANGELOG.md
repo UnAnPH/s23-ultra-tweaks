@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **`chargewatts` now also works on the S918B** (S918BXXUAGZIF's SystemUI, MD5 `fbd2cd7e81ccce52bf1f4720f973ddb7`, and its built-in Always On Display 8.9.65.90, MD5 `cb572b0e9e3fcdfd7416af8a116ff4cb`), built from the APKs PROFADAM sent (#51). Its own 9 MB download, picked by the SystemUI's MD5. Not yet tried on an S918B.
+
 ## v1.8.13
 
 - **Fix: Brave (and other user-installed Chromium browsers) quit at launch with `hideksu` on** (#52). `hidemnt` hid the module's mounts from the browser's GPU process too, and with both the `/system/lib64` and `/vendor/lib64` overlays gone from its view the Adreno driver refuses an OpenGL ES 3.0 context (`eglCreateContext: Requested version is not supported`); Chromium then gives up with "GPU process isn't usable. Goodbye." Either overlay alone is fine. It now keeps the mounts in Chromium's GPU process (`<package>:privileged_processN`), which runs Chromium's own code and no root check; the app's own processes are still hidden from. Chrome was never affected because it is a system app.
