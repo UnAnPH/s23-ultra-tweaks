@@ -262,7 +262,9 @@ ad_verdict() {
   nin=$(grep -c 'ContextTransferInitiated(context=.*clientName=ReceiveProvider' $1)
   nrs=$(grep -c 'NearbySharing: NearbySharingService onCreate' $1)
   nohand="the share never reached the AirDrop side (Share with Apple devices not shown or not tapped, or Play services didn't hand the share to Mosey)"
-  if [ $nin -gt 0 ] && [ $nrs -gt 0 ]; then
+  if [ $nin -gt 0 ] && grep -q 'Unexpected implicit intent broadcast start.*nearby\.sharing\.TRANSFER_' $1; then
+    v="An AirDrop share to this phone arrived ($nin), but Play services crashed on its own broadcast guard (issue #41), which cancels it: Play services $(dumpsys package com.google.android.gms 2>/dev/null | grep -m1 -oE 'versionName=[^ ]+' | cut -d= -f2) isn't taking the module's AirDrop receive allowlist. Update Play services, apply again, then retry"
+  elif [ $nin -gt 0 ] && [ $nrs -gt 0 ]; then
     v="An AirDrop share to this phone arrived ($nin), but Play services' Nearby restarted $nrs times (a crash), which cancels it: the crash lines below show why"
   elif [ $nmo -gt 0 ]; then
     if [ $nk -gt 0 ]; then v="Mosey ran and the Wi-Fi driver logged AirDrop link activity: the log shows how far it got"
@@ -2882,7 +2884,9 @@ airdrop-test)
     echo; echo "===== Mosey, Quick Share and Nearby lines (all levels, names in quotes masked) ====="
     rel $raw | sed -E "s/\"[^\"]*\"/<name>/g; s/'[^']*'/<name>/g" | tail -n 4000 | cut -c1-400
     echo; echo "===== crashes during the test (with stack traces) ====="
-    awk '$6 ~ /^(AndroidRuntime|DEBUG|libc)$/ || / am_crash/ || (/ am_proc_died/ && /gms|mosey|sharelive/)' $raw | tail -n 400 | cut -c1-300
+    # the tag field keeps its colon when the tag fills 8 characters or more ("AndroidRuntime:"); only errors, so
+    # libc's property warnings don't push the crash out
+    awk '($6 ~ /^(AndroidRuntime|DEBUG|libc):?$/ && $5 ~ /^[EF]$/) || / am_crash/ || (/ am_proc_died/ && /gms|mosey|sharelive/)' $raw | tail -n 400 | cut -c1-300
     echo; echo "===== kernel log during the test ====="
     grep -vE 'Runtime (suspend|resume)|PCI link|MHI state' $kr | tail -n 1500 | cut -c1-300
   } 2>&1 | scrub > $out
