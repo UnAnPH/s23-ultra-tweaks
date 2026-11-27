@@ -265,6 +265,14 @@ static int should_hide(int pid, const char *name)
 {
 	if (proc_uid(pid) < APP_UID)		/* root/system process: never touch */
 		return 0;
+	/* Chromium's GPU process ("<pkg>:privileged_processN" in Brave, Edge, Vivaldi, ...) loads the GLES
+	 * driver after the fork. With both the /system/lib64 and /vendor/lib64 overlays gone from its view
+	 * the Adreno driver refuses an ES 3.0 context ("eglCreateContext: Requested version is not
+	 * supported"), and the browser quits with "GPU process isn't usable. Goodbye." (issue #52).
+	 * Either overlay alone is fine. Keep the mounts there, even for a force-hidden package: the GPU
+	 * process runs Chromium's own code, not the app's, so nothing in it looks for root. */
+	if (strstr(name, ":privileged_process"))
+		return 0;
 	if (name_matches(name, g_keep, g_nkeep))	/* force-keep override */
 		return 0;
 	if (name_matches(name, g_hide, g_nhide))	/* force-hide override */

@@ -380,6 +380,10 @@ injected, and the files it would have seen are simply the stock ones.
   patched `services.jar` (above). Together they clear mount- and package-based detection; verified against
   Native Detector 7.7.0, which went from flagging suspicious/inconsistent mounts to "The Environment is
   normal".
+- It leaves a Chromium browser's GPU process (`<package>:privileged_processN`: Brave, Edge, Vivaldi …)
+  alone: without the `/system/lib64` and `/vendor/lib64` overlays the Adreno driver refuses its OpenGL ES
+  3.0 context and the browser quits at launch. That process runs Chromium's code, not the app's, so
+  nothing in it checks for root; the browser's own processes are still hidden from.
 - It never detaches anything in init's own mount namespace. Some app processes share it (Chrome's app
   zygote does), and a detach there would remove the tweaks for the whole phone.
 - It runs only while `hideksu` is on.
