@@ -263,7 +263,7 @@ ad_verdict() {
   nrs=$(grep -c 'NearbySharing: NearbySharingService onCreate' $1)
   nohand="the share never reached the AirDrop side (Share with Apple devices not shown or not tapped, or Play services didn't hand the share to Mosey)"
   if [ $nin -gt 0 ] && grep -q 'Unexpected implicit intent broadcast start.*nearby\.sharing\.TRANSFER_' $1; then
-    v="An AirDrop share to this phone arrived ($nin), but Play services crashed on its own broadcast guard (issue #41), which cancels it: Play services $(dumpsys package com.google.android.gms 2>/dev/null | grep -m1 -oE 'versionName=[^ ]+' | cut -d= -f2) isn't taking the module's AirDrop receive allowlist. Update Play services, apply again, then retry"
+    v="An AirDrop share to this phone arrived ($nin), but Play services crashed on its own broadcast guard (issue #41), which cancels it: Play services $(dumpsys package com.google.android.gms 2>/dev/null | grep -m1 -oE 'versionName=[^ ]+' | cut -d= -f2) isn't using the module's AirDrop receive allowlist (Broadcast guard below says which config copies have it). Apply again, which rewrites it and restarts Play services, then retry"
   elif [ $nin -gt 0 ] && [ $nrs -gt 0 ]; then
     v="An AirDrop share to this phone arrived ($nin), but Play services' Nearby restarted $nrs times (a crash), which cancels it: the crash lines below show why"
   elif [ $nmo -gt 0 ]; then
@@ -278,15 +278,19 @@ ad_verdict() {
   else v="Neither Quick Share nor Mosey logged anything: $4"; fi
 }
 # is the broadcast-guard allowlist (BCAST_FLAG) in Play services' live config?
+# Play services keeps two copies (user_de, read before the first unlock, and data); check each, since a
+# process can start from either.
 bcast_live() {
-  bl_any=0; bl_ok=0
+  bl_n=0; bl_ok=0; bl_miss=""
   for f in $BCAST_SNAPS; do
-    [ -f $f ] || continue; bl_any=1
-    grep -qF "$BCAST_FLAG" $f && grep -qF "nearby.sharing.TRANSFER_UPDATE" $f && bl_ok=1
+    [ -f $f ] || continue; bl_n=$((bl_n + 1))
+    if grep -qF "$BCAST_FLAG" $f && grep -qF "nearby.sharing.TRANSFER_UPDATE" $f; then bl_ok=$((bl_ok + 1))
+    else case $f in /data/user_de/*) bl_miss="${bl_miss:+$bl_miss, }device-protected" ;; *) bl_miss="${bl_miss:+$bl_miss, }data" ;; esac; fi
   done
-  [ $bl_any = 1 ] || { echo "no Play services config file yet"; return; }
-  [ $bl_ok = 1 ] && echo "AirDrop receive allowlist in the live config" ||
-    echo "AirDrop receive allowlist missing from the live config; apply again"
+  [ $bl_n -gt 0 ] || { echo "no Play services config file yet"; return; }
+  if [ $bl_ok = $bl_n ]; then echo "AirDrop receive allowlist in the live config ($bl_ok of $bl_n copies)"
+  elif [ $bl_ok -gt 0 ]; then echo "AirDrop receive allowlist in $bl_ok of $bl_n live config copies, missing from the $bl_miss copy; apply again"
+  else echo "AirDrop receive allowlist missing from the live config; apply again"; fi
 }
 AD_SUM=$V/airdrop-test.summary   # the last airdrop-test's verdict, shown in the report
 # what logcat holds: a busy phone fills the main buffer in minutes, so a missing line may just be old
