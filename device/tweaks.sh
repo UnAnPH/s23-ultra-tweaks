@@ -164,6 +164,16 @@ IN_MODEL=SM-S918B
 IN_MODEL_PROPS="ro.product.model ro.product.vendor.model ro.product.system.model ro.product.odm.model ro.product.product.model ro.product.system_ext.model ro.product.bootimage.model ro.product.system_dlkm.model ro.product.vendor_dlkm.model ro.boot.em.model"
 IN_SALES_PROPS="ro.csc.sales_code ro.boot.sales_code persist.audio.sales_code ril.sales_code"
 NEARBY_FLAGS="45704091 45723015 sharing_package_whitelist_check_bypass"   # Nearby Sharing: enableExternalProviders + provider-registry gate + GMS 26.46+ source-stamp bypass
+# Play services 26.46 guards its own broadcasts (Dqjx.c): an implicit one (no target app) whose action isn't on a
+# list throws IllegalStateException and crashes Play services. Incoming AirDrop shares hit it with
+# nearby.sharing.TRANSFER_UPDATE (issue #41). The list is flag 45645310 of config package com.google.android.gms: a
+# bytes flag holding a repeated string (field 1). The module adds the Nearby transfer actions to whatever list
+# Play services already has (BCAST_STOCK is the list seen on a phone, used only when none is found).
+# Found by @Ashraf12Nas.
+BCAST_FLAG=45645310
+BCAST_STOCK="com.ifpdos.systembar.action.HIDE_BAR com.seewo.freeform.TASK_MOVE_NO_RESIZE"
+BCAST_NEARBY="com.google.android.gms.nearby.sharing.TRANSFER_UPDATE com.google.android.gms.nearby.sharing.TRANSFER_METADATA com.google.android.gms.nearby.sharing.TRANSFER_FINISHED"
+BCAST_ACTIONS="$BCAST_STOCK $BCAST_NEARBY"   # gms_bcast_flag replaces it with the phone's own list plus BCAST_NEARBY
 
 HIST=/dev/s23tweaks.history   # every apply's lines since boot (tweaks.log holds only the last apply)
 # Set by cleanup when the module is removed after an apply in this boot. The binds that apply made stay
@@ -249,6 +259,17 @@ ad_verdict() {
     else v="Quick Share opened, but Mosey logged nothing: $nohand"; fi
   elif [ $nsl -gt 0 ]; then v="Mosey logged nothing. Quick Share logged $nsl lines but no screen of it opened; if you did share, $nohand"
   else v="Neither Quick Share nor Mosey logged anything: $4"; fi
+}
+# is the broadcast-guard allowlist (BCAST_FLAG) in Play services' live config?
+bcast_live() {
+  bl_any=0; bl_ok=0
+  for f in $BCAST_SNAPS; do
+    [ -f $f ] || continue; bl_any=1
+    grep -qF "$BCAST_FLAG" $f && grep -qF "nearby.sharing.TRANSFER_UPDATE" $f && bl_ok=1
+  done
+  [ $bl_any = 1 ] || { echo "no Play services config file yet"; return; }
+  [ $bl_ok = 1 ] && echo "AirDrop receive allowlist in the live config" ||
+    echo "AirDrop receive allowlist missing from the live config; apply again"
 }
 AD_SUM=$V/airdrop-test.summary   # the last airdrop-test's verdict, shown in the report
 # what logcat holds: a busy phone fills the main buffer in minutes, so a missing line may just be old
@@ -495,6 +516,143 @@ airdrop_post() {
   pm enable --user 0 com.google.android.mosey/.ExternalSharingService >/dev/null 2>&1 &&
     log "airdrop: Mosey's sharing service enabled" || log "airdrop: warning: could not enable Mosey's sharing service"
   gms_flags
+  gms_bcast_flag
+}
+
+# --- bytes for the allowlist flag: protobuf field 1 (string), repeated; built with printf octal escapes ---
+pb_oct() { printf "\\$(printf '%03o' $1)"; }
+pb_varint() { n=$1; while [ $n -ge 128 ]; do pb_oct $(( (n & 127) | 128 )); n=$((n >> 7)); done; pb_oct $n; }
+bcast_value() { for a in $BCAST_ACTIONS; do pb_oct 10; pb_varint ${#a}; printf '%s' "$a"; done; }
+# one Flag entry (name + bytes value) as the snapshot's repeated field 5
+bcast_entry() {
+  v=$1; inner=$W/inner.bin
+  { pb_oct 10; pb_varint ${#BCAST_FLAG}; printf '%s' "$BCAST_FLAG"; pb_oct 50; pb_varint $(wc -c < $v); cat $v; } > $inner
+  { pb_oct 42; pb_varint $(wc -c < $inner); cat $inner; }
+}
+
+# Where the broadcast guard reads BCAST_FLAG from. Play services builds config package com.google.android.gms as
+# direct-boot aware (kavc: hmpu.c()/d() set), so its snapshot lives in DEVICE-PROTECTED storage (/data/user_de/0),
+# not in /data/data. The /data/data copy normally doesn't exist, which is why only patching that path never took
+# effect (v1.8.10: "no Play services config file yet" while Dqjx.c kept crashing). Patch whichever copies exist.
+BCAST_SNAPS="/data/user_de/0/com.google.android.gms/files/phenotype/shared/com.google.android.gms.pb /data/data/com.google.android.gms/files/phenotype/shared/com.google.android.gms.pb"
+# bcast_stock FILE: the actions already in FILE's entry for BCAST_FLAG, one per line (none if it has no entry).
+# Snapshot entries are field 5 {1: name, other length-delimited field: value}; the value is repeated field 1 strings.
+bcast_stock() {
+  od -An -v -tx1 "$1" | tr -d ' \n' | awk -v fh="$(printf '%s' "$BCAST_FLAG" | od -An -v -tx1 | tr -d ' \n')" '
+    function hv(c) { return index("0123456789abcdef", c) - 1 }
+    function byte(k) { return hv(substr(h, 2 * k + 1, 1)) * 16 + hv(substr(h, 2 * k + 2, 1)) }
+    function varint(   v, m, b) { v = 0; m = 1
+      while (i < n) { b = byte(i); i++; v += (b % 128) * m; m *= 128; if (b < 128) break }
+      return v }
+    function str(p, l,   s, k) { s = ""; for (k = p; k < p + l; k++) s = s sprintf("%c", byte(k)); return s }
+    { h = $0; n = length(h) / 2; i = 0
+      while (i < n) {
+        key = varint(); wt = key % 8; fn = int(key / 8)
+        if (wt == 0) varint()
+        else if (wt == 1) i += 8
+        else if (wt == 5) i += 4
+        else if (wt == 2) { len = varint(); p = i; e = p + len
+          if (fn == 5) { name = ""; val = -1; vl = 0
+            while (i < e) { k2 = varint(); w2 = k2 % 8
+              if (w2 == 0) varint()
+              else if (w2 == 1) i += 8
+              else if (w2 == 5) i += 4
+              else if (w2 == 2) { l2 = varint(); if (int(k2 / 8) == 1) name = substr(h, 2 * i + 1, 2 * l2); else if (val < 0) { val = i; vl = l2 }; i += l2 }
+              else break }
+            if (name == fh && val >= 0) { i = val; e2 = val + vl
+              while (i < e2) { k3 = varint(); if (k3 % 8 != 2) break; l3 = varint(); if (int(k3 / 8) == 1) print str(i, l3); i += l3 }
+              exit } }
+          i = e }
+        else exit
+      } }'
+}
+# Remove every top-level snapshot entry (field 5) whose flag name is BCAST_FLAG from file $1, in place.
+# A stale entry must go before the new one is appended: two entries with one name break the reader's map.
+pb_drop_flag() {
+  pd_f=$1; pd_fh=$(printf '%s' "$BCAST_FLAG" | od -An -v -tx1 | tr -d ' \n'); pd_n=0
+  while [ $pd_n -lt 8 ]; do
+    pd_r=$(od -An -v -tx1 "$pd_f" | tr -d ' \n' | awk -v fh="$pd_fh" '
+      function hv(c) { return index("0123456789abcdef", c) - 1 }
+      function byte(k) { return hv(substr(h, 2 * k + 1, 1)) * 16 + hv(substr(h, 2 * k + 2, 1)) }
+      function varint(   v, m, b) { v = 0; m = 1
+        while (i < n) { b = byte(i); i++; v += (b % 128) * m; m *= 128; if (b < 128) break }
+        return v }
+      { h = $0; n = length(h) / 2; i = 0
+        while (i < n) {
+          st = i; key = varint(); wt = key % 8; fn = int(key / 8)
+          if (wt == 0) varint()
+          else if (wt == 1) i += 8
+          else if (wt == 5) i += 4
+          else if (wt == 2) { len = varint(); p = i; i += len
+            if (fn == 5 && byte(p) == 10) { q = p + 1; save = i; i = q; nl = varint(); nstart = i; i = save
+              if (substr(h, 2 * nstart + 1, 2 * nl) == fh && nl * 2 == length(fh)) { print st, i; exit } } }
+          else exit
+        } }')
+    [ -n "$pd_r" ] || break
+    set -- $pd_r
+    head -c $1 "$pd_f" > "$pd_f.a" && tail -c +$(($2 + 1)) "$pd_f" > "$pd_f.b" && cat "$pd_f.a" "$pd_f.b" > "$pd_f" || break
+    rm -f "$pd_f.a" "$pd_f.b"; pd_n=$((pd_n + 1))
+  done
+  rm -f "$pd_f.a" "$pd_f.b"
+}
+
+# Play services' broadcast guard (see BCAST_FLAG): override its allowlist so an incoming AirDrop share's
+# TRANSFER_UPDATE no longer crashes Play services. Edits a copy of the database, like gms_flags.
+gms_bcast_flag() {
+  G=/data/data/com.google.android.gms; DB=$G/databases/phenotype.db
+  SN=$G/files/phenotype/shared/com.google.android.gms.pb
+  SQ=$AIR/sqlite3; W=$R/gms2; rm -rf $W; mkdir -p $W
+  [ -f $DB ] || return
+  am force-stop com.google.android.gms
+  cp $DB $W/p.db; [ -f $DB-wal ] && cp $DB-wal $W/p.db-wal
+  id=$($SQ $W/p.db "select config_package_id from config_packages where name='com.google.android.gms'")
+  [ -n "$id" ] || { log "airdrop: Play services has no core config yet; AirDrop receive allowlist not set"; rm -rf $W; return; }
+  # the phone's own list (from the live snapshot) plus the Nearby actions, so entries Google adds are kept
+  stock=""; for SN in $BCAST_SNAPS; do [ -f $SN ] && stock="$stock $(bcast_stock $SN | grep -E '^[A-Za-z0-9_.]+$' | tr '\n' ' ')"; done
+  [ -n "$(echo $stock)" ] || stock=$BCAST_STOCK
+  BCAST_ACTIONS=$(printf '%s\n' $stock $BCAST_NEARBY | awk 'NF && !s[$0]++' | tr '\n' ' ')
+  bcast_value > $W/val.bin
+  hex=$(od -An -v -tx1 $W/val.bin | tr -d ' \n')
+  # keep what Play services had for the flag (issue #41): the report shows it, so the list's format can be checked
+  mkdir -p $V/backup
+  for SN in $BCAST_SNAPS; do [ -f $SN ] && [ ! -f $V/backup/bcast_stock_snap.pb ] && ! grep -qF nearby.sharing.TRANSFER_UPDATE $SN && cp $SN $V/backup/bcast_stock_snap.pb; done
+  $SQ $W/p.db "select 'flag-tables', group_concat(name) from sqlite_master where type='table'" > $V/backup/bcast_db.txt 2>&1
+  [ -n "$hex" ] || { log "airdrop: could not build the AirDrop receive allowlist"; rm -rf $W; return; }
+  ok=$($SQ $W/p.db "PRAGMA integrity_check;
+    DELETE FROM experiment_states_to_overrides WHERE override_id IN (SELECT override_id FROM flag_overrides WHERE config_package_id=$id AND account_id=0 AND name='$BCAST_FLAG');
+    DELETE FROM flag_overrides WHERE config_package_id=$id AND account_id=0 AND name='$BCAST_FLAG';
+    INSERT INTO flag_overrides (config_package_id, account_id, name, value, type, source) VALUES ($id, 0, '$BCAST_FLAG', x'$hex', 5, 0);
+    INSERT OR IGNORE INTO experiment_states_to_overrides (experiment_state_id, override_id)
+      SELECT s.experiment_state_id, o.override_id FROM experiment_states s, flag_overrides o
+      WHERE s.config_package_id=$id AND o.config_package_id=$id AND o.name='$BCAST_FLAG';
+    PRAGMA wal_checkpoint(TRUNCATE);" | head -1)
+  [ "$ok" = ok ] || { log "airdrop: Play services database check failed ($ok); AirDrop receive allowlist not set"; rm -rf $W; return; }
+  am force-stop com.google.android.gms
+  cat $W/p.db > $DB && rm -f $DB-wal $DB-shm
+  # the live snapshot(s): put the entry in now so it applies without waiting for Play services to rebuild them.
+  # An existing entry for the flag (the server's stock list) is cut out first: a duplicate name breaks the reader.
+  bc_done=0
+  for SN in $BCAST_SNAPS; do
+    [ -f $SN ] || continue
+    if grep -qF "$BCAST_FLAG" $SN && grep -qF "nearby.sharing.TRANSFER_UPDATE" $SN; then
+      bc_done=$((bc_done + 1)); log "airdrop: AirDrop receive allowlist already in $SN"; continue
+    fi
+    cp $SN $W/s.pb && pb_drop_flag $W/s.pb && bcast_entry $W/val.bin >> $W/s.pb && cat $W/s.pb > $SN &&
+      { bc_done=$((bc_done + 1)); log "airdrop: AirDrop receive allowlist on in $SN (Play services' broadcast guard lets Nearby's transfer updates through)"; } ||
+      log "airdrop: warning: could not patch $SN"
+  done
+  [ $bc_done -gt 0 ] || log "airdrop: AirDrop receive allowlist is in the database; Play services has no live config file for it yet (looked in $BCAST_SNAPS)"
+  # Mosey/Quick Share restart Play services between the DB write and the snapshot write above; a process started in
+  # that window keeps the OLD list in memory and still crashes on TRANSFER_UPDATE (v1.8.11: files right, crash anyway).
+  # Stop it once more now that the files are final, let it come back, and check the entry survived.
+  am force-stop com.google.android.gms
+  sleep 4
+  bc_ok=0
+  for SN in $BCAST_SNAPS; do [ -f $SN ] && grep -qF "$BCAST_FLAG" $SN && grep -qF "nearby.sharing.TRANSFER_UPDATE" $SN && bc_ok=1; done
+  gp=$(pidof com.google.android.gms 2>/dev/null | cut -d' ' -f1)
+  if [ $bc_ok = 1 ]; then log "airdrop: AirDrop receive allowlist final; Play services restarted after it (pid ${gp:-not running yet})"
+  else log "airdrop: warning: Play services dropped the AirDrop receive allowlist when it restarted"; fi
+  rm -rf $W
 }
 
 # Play services only binds Mosey when server-side Nearby flags are on. Add them as local
@@ -2581,6 +2739,7 @@ airdrop-test)
       "Bluetooth $([ "$(settings get global bluetooth_on)" = 1 ] && echo on || echo off)," \
       "AirDrop modules [$(grep -oE '^(wonder|bwfix) ' /proc/modules | tr -d '\n')]"
     echo "  Nearby flags: $(nearby_live)"
+    echo "  Broadcast guard: $(bcast_live)"
     echo "  network interfaces: $(ip -o link 2>/dev/null | awk -F': ' '{ sub(/@.*/, "", $2); print $2 }' | grep -vE '^(lo|dummy|ifb|tunl|gre|erspan|ip_vti|ip6|sit|rmnet|epdg)' | tr '\n' ' ')"
   }
   # the kernel log's last record number now: lines after it are the test's (its clock stops in deep sleep,
@@ -2654,6 +2813,7 @@ report)
       grep -vE 'Runtime (suspend|resume)|PCI link|MHI state' | tail -n 25 | sed 's/^/  /' | cut -c1-200
     echo "Mosey app: $(pidof com.google.android.mosey >/dev/null && echo running || echo "not running (it starts when Quick Share hands it a share)"); the logs below cover the last $(log_span), so an older start or share isn't in them"
     echo "Nearby flags: $(nearby_live)"
+    echo "Broadcast guard: $(bcast_live)"
     if [ -f $AD_SUM ]; then echo "last AirDrop test (tweaks.sh airdrop-test):"; sed 's/^/  /' $AD_SUM
     else echo "no AirDrop test recorded yet: Status > Record an AirDrop test, then try a share while it records"; fi
     echo "Mosey / Quick Share warnings and errors, last 30 (names in quotes masked):"
@@ -2732,7 +2892,9 @@ unflag)
   in_list=""
   for f in $NEARBY_FLAGS; do in_list="${in_list:+$in_list, }'$f'"; done
   $SQ $W/p.db "DELETE FROM experiment_states_to_overrides WHERE override_id IN (SELECT override_id FROM flag_overrides WHERE name IN ($in_list) AND account_id=0);
-    DELETE FROM flag_overrides WHERE name IN ($in_list) AND account_id=0; PRAGMA wal_checkpoint(TRUNCATE);" >/dev/null
+    DELETE FROM flag_overrides WHERE name IN ($in_list) AND account_id=0;
+    DELETE FROM experiment_states_to_overrides WHERE override_id IN (SELECT override_id FROM flag_overrides WHERE name='$BCAST_FLAG' AND account_id=0);
+    DELETE FROM flag_overrides WHERE name='$BCAST_FLAG' AND account_id=0; PRAGMA wal_checkpoint(TRUNCATE);" >/dev/null
   am force-stop com.google.android.gms; cat $W/p.db > $DB && rm -f $DB-wal $DB-shm; rm -rf $W
   echo "Play services flag overrides removed"
   ;;
