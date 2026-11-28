@@ -233,11 +233,22 @@ scrub() {
     -e 's/((device|account|profile|owner|user)[Nn]ame=|[(, ]name=)[^,)]+/\1<name>/g' -e 's/(account=)[^,)]+/\1<account>/g' |
     if [ -n "$sn" ]; then sed "s/$sn/<serial>/g"; else cat; fi
 }
+# Play services 26.45 also keeps flag snapshots in a newer store, app_phenotype_shared/<hash>/<hash>.pb
+# (an 8-byte header, then the snapshot; flag names hashed, so it can't be patched). When the Nearby one
+# exists Play services reads it instead of files/phenotype/shared/...nearby.pb, so the overrides read
+# false and Mosey is never bound (#22). Lists those files; their header names the config package.
+nearby_newstore() {
+  for f in /data/data/com.google.android.gms/app_phenotype_shared/*/*.pb \
+           /data/user_de/0/com.google.android.gms/app_phenotype_shared/*/*.pb; do
+    [ -f "$f" ] && head -c 64 "$f" | grep -qaF 'com.google.android.gms.nearby ' && echo "$f"
+  done
+}
 # Nearby flags in Play services' live config (the snapshot Nearby reads), not just in its database:
 # an override can sit in the database and still be missing here, which leaves Mosey unused
 nearby_live() {
   f=/data/data/com.google.android.gms/files/phenotype/shared/com.google.android.gms.nearby.pb
   [ -f $f ] || { echo "no Nearby config file yet"; return; }
+  [ -n "$(nearby_newstore)" ] && { echo "0 of 3 in effect: Play services reads a newer Nearby snapshot without them; apply again"; return; }
   c=0; t=0; for x in $NEARBY_FLAGS; do t=$((t + 1)); grep -qF "$x" $f && c=$((c + 1)); done
   echo "$c of $t in Play services' live Nearby config$([ $c -lt $t ] && echo "; apply again to put them back")"
 }
@@ -538,6 +549,7 @@ airdrop_post() {
   # Play services then finds no AirDrop provider. Enable it again now that the service is registered.
   pm enable --user 0 com.google.android.mosey/.ExternalSharingService >/dev/null 2>&1 &&
     log "airdrop: Mosey's sharing service enabled" || log "airdrop: warning: could not enable Mosey's sharing service"
+  mosey_keep_mounts
   gms_flags
   gms_bcast_flag
 }
@@ -721,6 +733,20 @@ wr_set() {   # wr_set on|off
   am force-stop com.google.android.gms; rm -rf $W
 }
 
+# KernelSU Next's kernel_umount strips module mounts from every app without root, so Mosey's process
+# sees the empty placeholder MoseyApp.apk under the overlay ("Failed to find magic") and crashes when
+# Play services binds it; Quick Share then says it stopped. Keep the mounts for Mosey only.
+mosey_keep_mounts() {
+  K=/data/adb/ksud
+  $K profile get com.google.android.mosey >/dev/null 2>&1 || return 0   # not KernelSU Next
+  $K profile get com.google.android.mosey | grep -q '"umount_modules": false' && return 0
+  uid=$(pm list packages -U com.google.android.mosey | sed -n 's/.*uid:\([0-9]*\).*/\1/p' | head -n 1)
+  [ -n "$uid" ] || { log "airdrop: warning: Mosey's uid not found; KernelSU may hide its mounts"; return 0; }
+  printf '{"key":"com.google.android.mosey","uid":%s,"allow_su":false,"non_root":{"use_default":false,"umount_modules":false}}' $uid |
+    $K profile set - >/dev/null 2>&1 && log "airdrop: KernelSU keeps the module's mounts for Mosey (Umount modules off)" ||
+    log "airdrop: warning: could not turn off KernelSU's Umount modules for Mosey"
+}
+
 # Play services only binds Mosey when server-side Nearby flags are on. Add them as local
 # overrides (account 0 = the device) and patch the current flag snapshot so they apply right away.
 gms_flags() {
@@ -779,6 +805,12 @@ gms_flags() {
     done
     [ $pb_ok = 1 ] && cat $W/s.pb > $SNAP
   fi
+  # move the newer store's Nearby snapshot aside so Play services falls back to the patched one above
+  ns=0; for f in $(nearby_newstore); do
+    [ -f $V/backup/nearby-newstore.pb ] || cp -p "$f" $V/backup/nearby-newstore.pb
+    mv -f "$f" "$f.s23off" && ns=$((ns + 1))
+  done
+  [ $ns = 0 ] || log "airdrop: moved Play services' newer Nearby snapshot aside ($ns file), so the flags apply"
   rm -rf $W
   log "airdrop: Play services Nearby flags on ($n of $total overrides present)"
 }
