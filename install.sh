@@ -8,7 +8,7 @@ set -euo pipefail
 # below can read the rest of the script from stdin (curl | bash).
 main() {
 REPO=dtechterminal/s23-ultra-tweaks
-VERSION=v1.8.13
+VERSION=v1.8.14
 AIRDROP_KBASE=5.15.197-android13-8-34343818-ab; AIRDROP_FW="S918WVLU8GZIF S918BXXUAGZIF S918U1UEU8GZIF S918USQU8GZIF S918NKSU8GZIF S9180ZHU8GZIF"   # as in device/tweaks.sh
 PHONE_DIR=/data/adb/s23tweaks          # state (and the code, when the module isn't installed)
 MODULE_DIR=/data/adb/modules/s23_ultra_tweaks
@@ -69,7 +69,7 @@ jar_md5=$(sh_ md5sum /system/framework/services.jar 2>/dev/null | cut -d' ' -f1)
 can_ksu=0; why_ksu="this phone's services.jar isn't one a patch was made from (S918W S918WVLU8GZIF, S918B INS, S918U1)"
 case " $HKS_MD5 " in *" ${jar_md5:-none} "*) can_ksu=1; why_ksu="" ;; esac
 # chargewatts patches SystemUI.apk: stock and patched md5s as in CW_ROWS (device/tweaks.sh)
-CW_MD5="adcea3e330bb75ab20c8a3602d5a3a65 1b209734db41e94efb6e2b7d4f37d442 fbd2cd7e81ccce52bf1f4720f973ddb7 0b8e71af3de1a091bb7dab481f812e86"
+CW_MD5="adcea3e330bb75ab20c8a3602d5a3a65 9bc0cf1d101f349005cb972315db1267 1b209734db41e94efb6e2b7d4f37d442 fbd2cd7e81ccce52bf1f4720f973ddb7 278897720fab3434c5578b8d93c544cf"   # stock + patched (current, and v1.8.12-13 patched still bound during the update)
 sysui_md5=$(sh_ md5sum /system_ext/priv-app/SystemUI/SystemUI.apk 2>/dev/null | cut -d' ' -f1)
 can_cw=0; why_cw="this phone's SystemUI.apk (md5 ${sysui_md5:-unknown}) isn't one a patch was made from (so far S918WVLU8GZIF's and S918BXXUAGZIF's)"
 case " $CW_MD5 " in *" ${sysui_md5:-none} "*) can_cw=1; why_cw="" ;; esac

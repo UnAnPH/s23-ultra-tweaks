@@ -114,8 +114,8 @@ galaxyai galaxyai-S918WVLU8GZIF.tar.gz 5619aaee7580b985df300dcfca1fadc56bc774f60
 settingssearch settingssearch-S918WVLU8GZIF.tar.gz bddfa32a08def256b7497730a0e7faecf7b1621655ce0cc85bec423843357042
 callscreen callscreen-S918WVLU8GZIF.tar.partaa 6a8d141557050e738b3a805d741463aae46b9322732bdd3039d836c0d116af9a
 callscreen callscreen-S918WVLU8GZIF.tar.partab 3335ea84794746040513e4297175736d792a19f378187d7b970c4058bc421025
-chargewatts:adcea3e330bb75ab20c8a3602d5a3a65 chargewatts-S918WVLU8GZIF.tar.gz 27e8a810f7a7ba6570a2aff32c4d592cd165f99fff4f9d21abffb0e3958933e1
-chargewatts:fbd2cd7e81ccce52bf1f4720f973ddb7 chargewatts-S918BXXUAGZIF.tar.gz 84fc7b926cada3bc201708bf1b1ff5823984bd46d8677f28fb46d14f004cc197"
+chargewatts:adcea3e330bb75ab20c8a3602d5a3a65 chargewatts-S918WVLU8GZIF-2.tar.gz a4ad417abdebf610d91c3447ce464c2276b59c0127d82efdb3dc7842542f10ac
+chargewatts:fbd2cd7e81ccce52bf1f4720f973ddb7 chargewatts-S918BXXUAGZIF.tar.gz 6a6e69a380026ecca0e4c22bef1d80720c0db439546844900ed7f91326048ee3"
 SETTINGS=/system/priv-app/SecSettings/SecSettings.apk
 # colortone: firmware, md5 of its SecSettings.apk, md5 with files/SecSettings-ead-<firmware>.patch applied
 # (tools/eadpatch.py makes the patch and prints both for another firmware's APK)
@@ -1769,7 +1769,7 @@ payload_fetch() {
     t=${k%%:*}; has $t || continue
     case $k in *:*) case $t in
       hideksu) [ "${k#*:}" = "$(hks_row | cut -d' ' -f1)" ] ;;
-      chargewatts) [ "${k#*:}" = "$(cw_row | cut -d' ' -f1)" ] ;;
+      chargewatts) [ "${k#*:}" = "$(cw_row | cut -d' ' -f2)" ] ;;   # rows are "systemui <stock md5> ..."
       *) false ;;
     esac || continue ;; esac
     [ $t = callscreen ] && lc_ok && continue      # installed already; its 3.1 GB isn't kept
@@ -2243,31 +2243,40 @@ hideksu_on() {
 # near its step voltage, plus hv_charger_status when the charger isn't a 45 W one.
 #   SystemUI: one call before KeyguardSecIndicationController.addInitialIndication() posts the BATTERY text.
 #   AOD (com.samsung.android.app.aodservice, runs as a plugin inside SystemUI): every return of the method that
-#   builds the "until full" line. Only the built-in copy in /system is patched. A Galaxy Store update lives in
-#   /data/app, and the package manager re-checks those signatures when the framework restarts: it removed a
-#   bound, patched update as corrupt (uninstalling the update). With an update installed, AOD is skipped.
+#   builds the "until full" line: the built-in copy in /system, or a Galaxy Store update in /data/app. On a
+#   framework restart the package manager re-checks the signature of a /data/app apk whose time changed
+#   (collectCertificatesLI: "<path> changed; collecting certs") and uninstalled a bound, patched update in
+#   v1.8.12 testing. So the patched copy gets the stock file's time (the stored signature is reused, as for an
+#   untouched apk), and the module's own framework restart runs with that bind off.
 # tools/chargewatts/build.sh makes both from the stock APKs. Each patched APK keeps every stock byte up to its
 # signing block, so the download holds only the tails, and fits only the exact APK it was made from.
 # Rows: kind, md5 stock, md5 patched, stock bytes kept, where it came from.
 SYSUI=/system_ext/priv-app/SystemUI/SystemUI.apk
 AOD_PKG=com.samsung.android.app.aodservice
-CW_ROWS="systemui adcea3e330bb75ab20c8a3602d5a3a65 1b209734db41e94efb6e2b7d4f37d442 62025728 S918WVLU8GZIF
-aod 8765be536661cd4f6f8c2e29a6006766 b0f8f1c4d9935eb882f7a7ee74bb8b2c 52326400 8.9.65.90
-systemui fbd2cd7e81ccce52bf1f4720f973ddb7 0b8e71af3de1a091bb7dab481f812e86 95891456 S918BXXUAGZIF
-aod cb572b0e9e3fcdfd7416af8a116ff4cb 867c469c595b2b42d6888c4d52f8ec07 52326400 8.9.65.90"
+# aod rows cover both the built-in AODService_v80 and any Galaxy Store update of the app (whichever is the
+# active apk); each tail in the payload is named AOD-<patched md5>.tail so several can live side by side.
+CW_ROWS="systemui adcea3e330bb75ab20c8a3602d5a3a65 9bc0cf1d101f349005cb972315db1267 62025728 S918WVLU8GZIF
+aod 8765be536661cd4f6f8c2e29a6006766 de46b4836ac3bd896f180401b4f7c528 52326400 8.9.65.90
+aod ea75116a19018c6cb95a0701f506522c f807822d4e954a132ff1ac86fc58ba31 40398848 8.9.67.3
+systemui fbd2cd7e81ccce52bf1f4720f973ddb7 278897720fab3434c5578b8d93c544cf 95891456 S918BXXUAGZIF
+aod cb572b0e9e3fcdfd7416af8a116ff4cb 0972156655e77111216404c4cb20752e 52326400 8.9.65.90"
 AOD_SYS=/system/priv-app/AODService_v80/AODService_v80.apk
 aod_apk() { pm path $AOD_PKG 2>/dev/null | sed -n 's/^package://p' | head -n 1; }
 cw_rowof() { m=$(md5 "$2"); echo "$CW_ROWS" | awk -v k=$1 -v m="$m" '$1 == k && ($2 == m || $3 == m)'; }   # cw_rowof <kind> <apk>
 cw_row() { cw_rowof systemui $SYSUI; }
 cw_patched() { [ -n "$2" ] && bound "$2" && [ "$(md5 "$2")" = "$(cw_rowof $1 "$2" | cut -d' ' -f3)" ]; }
 cw_on() { cw_patched systemui $SYSUI; }
-cw_aod_on() { cw_patched aod $AOD_SYS && [ "$(aod_apk)" = $AOD_SYS ]; }
+cw_ours() { grep " $1 " /proc/1/mountinfo | grep -q "/payload/chargewatts/"; }   # bound by chargewatts (any version)
+cw_aod_data() { a=$(aod_apk); case "$a" in /data/*) cw_ours "$a" && echo "$a" ;; esac; }   # our bind over a Store update
+cw_aod_on() { a=$(aod_apk); cw_patched aod "$a"; }   # the active AOD apk (built-in or a Store update) is patched
 sysui_restart() { p=$(pidof com.android.systemui) && kill $p; }   # persistent: Android starts it again at once
-# cw_bind <kind> <apk> <name>: rebuild the patched copy from the stock APK + <name>.tail and bind it read-only.
-# 0 = newly bound, 1 = failed, 2 = already bound. A bind is read-write whatever "ro" says, and Android then
-# won't precompile the app and runs it from bytecode, so hidemnt remounts it read-only.
+# cw_bind <kind> <apk>: rebuild the patched copy from the stock APK + its tail and bind it read-only. The tail
+# is SystemUI.tail for systemui, AOD-<patched md5>.tail for aod (so the built-in and a Store update can both
+# ship in one payload). 0 = newly bound, 1 = failed, 2 = already bound. A bind is read-write whatever "ro"
+# says, and Android then won't precompile the app and runs it from bytecode, so hidemnt remounts it read-only.
 cw_bind() {
-  k=$1; t=$2; n=$3; set -- $(cw_rowof $k "$t")
+  k=$1; t=$2; set -- $(cw_rowof $k "$t")   # $1 kind, $2 stock md5, $3 patched md5, $4 keep bytes
+  [ $k = systemui ] && n=SystemUI || n=AOD-$3
   cw_patched $k "$t" && return 2
   bound "$t" && umount -l "$t"   # someone else's or an older copy: start from stock
   P=$PL/chargewatts/$n.apk
@@ -2277,39 +2286,57 @@ cw_bind() {
     [ "$(md5 $P.new)" = $3 ] || { rm -f $P.new; log "chargewatts: the rebuilt $n isn't the expected one"; return 1; }
     mv $P.new $P
   fi
-  chmod 644 $P; chcon "$(ls -Z "$t" | cut -d' ' -f1)" $P   # system_file
+  chmod 644 $P; chcon "$(ls -Z "$t" | cut -d' ' -f1)" $P   # keep the stock file's label (system_file or apk_data_file)
+  touch -r "$t" $P   # and its time, so the package manager doesn't re-check the signature (see above)
   mount -o bind $P "$t" || { log "chargewatts: couldn't bind the patched $n"; return 1; }
   [ -x $HIDEMNT ] || chmod 755 $HIDEMNT 2>/dev/null
   $HIDEMNT rdonly "$t" 2>/dev/null || log "chargewatts: warning: couldn't make the $n bind read-only, so it runs uncompiled (slower)"
   return 0
 }
+# The direct-charging step table (device tree, big-endian u32s), copied to a file in SystemUI's device-protected
+# data, which SystemUI can read (the device tree is plain sysfs to it): line 1 the battery level each step ends
+# at, line 2 each step's battery current in mA. S23Watts uses it to say where the current next drops.
+CW_STEPS=/data/user_de/0/com.android.systemui/files/s23tweaks_dcsteps
+dtu32() { for h in $(od -An -tx1 -v "$1" 2>/dev/null | tr -d ' \n' | sed 's/\(........\)/\1 /g'); do echo $((0x$h)); done | tr '\n' ' '; }
+cw_steps() {
+  T=/proc/device-tree/samsung_mobile_device/battery; F=${CW_STEPS%/*}
+  [ -d $F ] && [ -f $T/battery,dc_step_chg_val_iout ] || return 0
+  n=$(dtu32 $T/battery,dc_step_chg_step | cut -d' ' -f1)
+  soc=$(dtu32 $T/battery,dc_step_chg_cond_soc | cut -d' ' -f1-$n); iout=$(dtu32 $T/battery,dc_step_chg_val_iout | cut -d' ' -f1-$n)
+  [ -n "$n" ] && [ -n "$soc" ] && [ -n "$iout" ] || return 0
+  printf '%s\n%s\n' "$soc" "$iout" > $CW_STEPS.new && chown $(stat -c %u:%g $F) $CW_STEPS.new && chmod 644 $CW_STEPS.new &&
+    chcon "$(ls -Zd $F | cut -d' ' -f1)" $CW_STEPS.new && mv $CW_STEPS.new $CW_STEPS || rm -f $CW_STEPS.new
+}
 # cw_apply: returns 0 when SystemUI has to restart to load the patched copies
 cw_apply() {
+  cw_ours $SYSUI && [ -z "$(cw_row)" ] && umount -l $SYSUI   # an older chargewatts copy: back to stock, which has a row
   [ -n "$(cw_row)" ] || { log "chargewatts: this phone's SystemUI (md5 $(md5 $SYSUI)) isn't one the patch was made for; skipped"; return 1; }
-  ch=0; cw_bind systemui $SYSUI SystemUI; r=$?
+  cw_steps
+  ch=0; cw_bind systemui $SYSUI; r=$?
   [ $r = 1 ] && return 1; [ $r = 0 ] && ch=1
-  a=$(aod_apk); aod=0
+  a=$(aod_apk); aod=0   # patch whichever AOD apk is active: the built-in, or a Galaxy Store update in /data/app
+  [ -n "$a" ] && cw_ours "$a" && [ -z "$(cw_rowof aod "$a")" ] && umount -l "$a"   # likewise an older AOD copy
   if [ -z "$a" ]; then log "chargewatts: no Always On Display app; lock screen only"
-  elif [ "$a" != $AOD_SYS ]; then
-    bound $AOD_SYS && umount -l $AOD_SYS
-    log "chargewatts: Always On Display runs a Galaxy Store update ($(dumpsys package $AOD_PKG | sed -n 's/^ *versionName=//p' | head -n 1)); only the built-in copy can be patched, so lock screen only"
-  elif [ -z "$(cw_rowof aod $a)" ]; then
-    log "chargewatts: the built-in Always On Display (md5 $(md5 $a)) isn't the one the patch was made for ($(echo "$CW_ROWS" | awk '$1 == "aod" {print $NF}' | sort -u | tr '\n' ' ' | sed 's/ $//')); lock screen only"
-  else cw_bind aod $a AOD; r=$?; [ $r = 0 ] && ch=1; [ $r != 1 ] && aod=1; fi
+  elif [ -z "$(cw_rowof aod "$a")" ]; then
+    log "chargewatts: this Always On Display (md5 $(md5 "$a"), $(dumpsys package $AOD_PKG | sed -n 's/^ *versionName=//p' | head -n 1)) isn't one the patch was made for ($(echo "$CW_ROWS" | awk '$1 == "aod" {print $NF}' | sort -u | tr '\n' ' ' | sed 's/ $//')); lock screen only"
+  else
+    [ "$a" != $AOD_SYS ] && bound $AOD_SYS && umount -l $AOD_SYS   # drop a stale built-in bind left from before a Store update
+    cw_bind aod "$a"; r=$?; [ $r = 0 ] && ch=1; [ $r != 1 ] && aod=1
+  fi
   [ $ch = 0 ] && [ -f /dev/s23tweaks_cw ] && { log "chargewatts: already on"; return 1; }   # SystemUI restarted after the binds
   cmd package compile -m speed-profile -f com.android.systemui >/dev/null 2>&1 ||
     log "chargewatts: warning: precompiling SystemUI failed; it runs uncompiled until Android does it"
   [ $aod = 1 ] && cmd package compile -m speed-profile -f $AOD_PKG >/dev/null 2>&1
-  log "chargewatts: $([ $aod = 1 ] && echo "lock screen and Always On Display show" || echo "lock screen shows") the charging watts (experimental; if the lock screen, AOD or status bar misbehaves, unpick this)"
+  log "chargewatts: $([ $aod = 1 ] && echo "lock screen, Always On Display and charging notification show" || echo "lock screen and charging notification show") the charging watts (experimental; if the lock screen, AOD or status bar misbehaves, unpick this)"
   return 0
 }
 cw_off() {
-  a=$(aod_apk)
-  for t in $SYSUI $AOD_SYS; do bound "$t" && umount -l "$t"; done
+  a=$(aod_apk); aodp=0; [ -n "$a" ] && cw_patched aod "$a" && aodp=1
+  for t in $SYSUI $AOD_SYS "$a"; do [ -n "$t" ] && bound "$t" && umount -l "$t"; done
   bound $SYSUI && return 1
-  rm -f /dev/s23tweaks_cw
+  rm -f /dev/s23tweaks_cw $CW_STEPS
   cmd package compile -m speed-profile -f com.android.systemui >/dev/null 2>&1   # the stock dex has its own compiled code
-  [ "$a" = $AOD_SYS ] && cmd package compile -m speed-profile -f $AOD_PKG >/dev/null 2>&1
+  [ $aodp = 1 ] && cmd package compile -m speed-profile -f $AOD_PKG >/dev/null 2>&1
   return 0
 }
 
@@ -2664,6 +2691,7 @@ apply)
     { is_on $x || { [ $x = colortone ] && [ -f /system/priv-app/$EAD/$EAD.apk ]; }; } &&
       log "$x: not picked, but still on from an earlier apply in this boot; a reboot turns it off"
   done
+  has chargewatts && cw_ours $SYSUI && [ -z "$(cw_row)" ] && umount -l $SYSUI   # an older chargewatts copy hides the stock md5 the download is keyed by
   payload_fetch   # before the AirDrop driver swap takes Wi-Fi down
   if has airdrop; then
     wifi_off && WIFI_WAS_OFF=1   # before the driver swap turns it on; wifi7_check turns it back off
@@ -2760,8 +2788,12 @@ $CF_PROFPS"
   apk_binds
   cw_restart=0
   if has chargewatts; then cw_apply && cw_restart=1
-  elif bound $SYSUI && [ -n "$(cw_row)" ]; then cw_off && { log "chargewatts: not picked; stock lock screen charging line back"; cw_restart=1; }; fi
-  [ $restart = 1 ] && restart_framework
+  elif cw_ours $SYSUI; then cw_off && { log "chargewatts: not picked; stock lock screen charging line back"; cw_restart=1; }; fi
+  if [ $restart = 1 ]; then
+    cwd=$(cw_aod_data); [ -n "$cwd" ] && umount -l "$cwd"   # no bind over a /data/app apk while the package manager rescans
+    restart_framework
+    [ -n "$cwd" ] && has chargewatts && cw_bind aod "$(aod_apk)" && sysui_restart
+  fi
   [ $cw_restart = 1 ] && { [ $restart = 1 ] || sysui_restart; has chargewatts && touch /dev/s23tweaks_cw; }
   if has hideksu; then hidemnt_start                                   # after the restart, so it catches the respawned apps
   elif hidemnt_running; then hidemnt_stop; log "hideksu: app mount-hiding stopped (not picked)"; fi
@@ -2881,7 +2913,7 @@ status)
   echo "audioeraser: $([ -f /system/etc/fastScanner.tflite ] && echo on || echo off), engine $(same_size /system/lib64/$VE $PL/audioeraser/$VE && echo S24 || echo stock)"
   echo "colortone: Settings $(bound $SETTINGS && echo patched || echo stock), service $([ -f /system/priv-app/$EAD/$EAD.apk ] && echo on || echo off)"
   echo "galaxyai: $(for p in $GAI_APPS; do n=${p#*/}; printf '%s=%s ' $n "$(same_size /system/$p/$n.apk $PL/galaxyai/$n.apk && echo S24 || echo stock)"; done)C2PA=$(same_size $C2PA $D/files/libC2paDps-shim.so && echo shim || echo stock)"
-  echo "chargewatts: $(if cw_on; then echo "lock screen on, AOD $(cw_aod_on && echo on || { [ "$(aod_apk)" = $AOD_SYS ] && echo "off (not the version the patch was made for)" || echo "off (a Galaxy Store update of Always On Display is installed; only the built-in copy is patched)"; })"; elif [ -n "$(cw_row)" ]; then echo off; else echo "not available for this SystemUI"; fi)"
+  echo "chargewatts: $(if cw_on; then echo "lock screen on, AOD $(cw_aod_on && echo on || { [ -n "$(cw_rowof aod "$(aod_apk)")" ] && echo "off (apply again)" || echo "off (this Always On Display version isn't one the patch was made for)"; })"; elif [ -n "$(cw_row)" ]; then echo off; else echo "not available for this SystemUI"; fi)"
   echo "vulkan:   renderer $(getprop debug.hwui.renderer | grep . || echo default)"
   echo "hideksu:  $(hideksu_on && echo "on (KernelSU manager hidden from apps)" || { bound $KSUJAR && echo "bound, waiting for a framework restart" || echo off; }); mounts $(hidemnt_running && { n=$(hidemnt_count); [ "$n" -gt 0 ] 2>/dev/null && echo "hidden from user-installed apps ($n override(s))" || echo "hidden from user-installed apps"; } || { grep -qw hideksu $V/choices 2>/dev/null && echo "visible to apps (the hiding daemon isn't running; apply again to restart it)" || echo "visible to apps"; })"
   echo "wifi7:    wpa_supplicant $(bound $WPAS && echo S24 || echo stock), driver MLO settings $(bound $INI && echo on || echo off)"
