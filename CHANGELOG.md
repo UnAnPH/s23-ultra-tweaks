@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Fix: AirDrop never showed up because Play services ignored the Nearby flags** (#22). Play services 26.45 also keeps flag snapshots in a newer store (`app_phenotype_shared/<hash>/<hash>.pb`, flag names hashed). When it has a Nearby snapshot there, it reads that instead of the patched `files/phenotype/shared/com.google.android.gms.nearby.pb`, so all three overrides read false in-process (checked with a log-only Xposed hook on `khta.bd()`/`khsx.L()`) and the external provider registry never starts. The apply now moves that file aside (`.s23off`, first copy backed up to `backup/nearby-newstore.pb`) before restarting Play services, and the test/report's *Nearby flags* line says when it's back. Seen on an S918B, S918BXXUAGZIF, Play services 26.45.31.
+- **Fix: Mosey crashed on start under KernelSU Next** ("Quick Share keeps stopping"). Its `kernel_umount` strips module mounts from apps without root, so Mosey's process saw the empty `MoseyApp.apk` placeholder (`Failed to find magic`). The apply turns off *Umount modules* in Mosey's app profile only (`ksud profile set`); other apps keep the default.
+
 ## v1.8.14
 
 - **`chargewatts`: watts in the charging notification, and *now / max*.** The charging notification's text gets the same addition as the lock screen and AOD lines (one call in `ChargingNotification$show$1.run()` after `getContentText`). The watts now sit next to the most the current charging step allows, the step's battery current (FCC's `VOTER_CABLE` vote, which the step charger sets) × the battery voltage: *63% • 27.1 / 27 W (drops at 80%)*. At the max it says at which battery level the next, lower step starts, from the direct-charging step table in the device tree, which the module copies into SystemUI's own data folder at apply (SystemUI can't read the device tree). Below the max it gives the reason as before. This answers why a 45 W charger rarely shows 45 W: the phone takes about 37 W only below 23%, and less at each step after.
