@@ -6,7 +6,7 @@ The tweaks come in six categories. The module page lets you pick a whole categor
 Each one works on any S23 Ultra on One UI 9 unless it says otherwise.
 
 **What's new** (details in the [changelog](CHANGELOG.md)):
-- **v1.8.15**: AirDrop works again with Play services 26.45 (it keeps Nearby flags in a newer store) and with KernelSU Next (PR #57, by giteshraheja). **Charging watts** now shows on the S918B's Always On Display with the Galaxy Store's AOD 8.9.67.3, and speaks Turkish when the phone does (#56).
+- **v1.8.15**: AirDrop works again with Play services 26.45 (it keeps Nearby flags in a newer store) and with KernelSU Next (PR #57, by giteshraheja). **Charging watts** now shows on the S918B's Always On Display with the Galaxy Store's AOD 8.9.67.3, and speaks Turkish or Czech when the phone does (#56, #58).
 - **v1.8.14**: **charging watts** now shows in the charging notification too, as *now / max* for the current charging step with where it drops (*27.1 / 27 W (drops at 80%)*), works with the Galaxy Store's Always On Display 8.9.67.3 (S918W), and supports the S918B (S918BXXUAGZIF, #51, #54).
 - **v1.8.13**: Brave, Vivaldi and other Play Store Chromium browsers no longer quit at launch with `hideksu` on: the mount hider now leaves their GPU process alone (#52).
 - **v1.8.12**: new experimental **charging watts** (`chargewatts`, pick it by number): the lock screen and Always On Display charging lines show the power going into the battery and what holds it back (*phone warm*, *tapering*, *25 W charger*). Works on a stock SystemUI checked by MD5 (so far S918WVLU8GZIF's); the AOD line needs the built-in Always On Display 8.9.65.90.

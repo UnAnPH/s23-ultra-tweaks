@@ -79,10 +79,25 @@ public final class S23Watts {
         catch (Throwable t) { return vote(votes, "IV", "VOTER_DC_MODE") > 0; }
     }
 
-    /** Turkish (#56); other languages get English. The rest of the line is Samsung's, already translated. */
-    private static boolean tr() { return "tr".equals(Locale.getDefault().getLanguage()); }
+    /** Turkish (#56) and Czech (#58); other languages get English. The rest of the line is Samsung's, already
+     * translated. */
+    private static String lang() { return Locale.getDefault().getLanguage(); }
+    private static boolean tr() { return "tr".equals(lang()); }
+    private static boolean cs() { return "cs".equals(lang()); }
 
     private static String t(String en) {
+        if (cs()) switch (en) {   // by soukup96-eng (#58)
+            case "phone warm": return "telefon se zahřívá";
+            case "phone in use": return "telefon se používá";
+            case "battery temperature": return "teplota baterie";
+            case "charger chip warm": return "hřeje nabíjecí čip";
+            case "tapering": return "zpomalování";
+            case "battery protection": return "ochrana baterie";
+            case "25 W charger": return "25W nabíječka";
+            case "15 W charger": return "15W nabíječka";
+            case "slow charger": return "pomalá nabíječka";
+            default: return en;
+        }
         if (!tr()) return en;
         switch (en) {
             case "phone warm": return "telefon sıcak";
@@ -131,7 +146,7 @@ public final class S23Watts {
                 int mv = (int) (Long.parseLong(read("voltage_now")) / 1000);
                 int dc = dc(votes) ? value(votes, "DCFV") : -1;
                 int fv = dc > 0 ? dc : value(votes, "FV");
-                if (fv > 0 && mv >= fv - 100) why = tr() ? t("tapering") : "tapering at " + read("capacity") + "%";   // tr: the level is on the line already
+                if (fv > 0 && mv >= fv - 100) why = tr() || cs() ? t("tapering") : "tapering at " + read("capacity") + "%";   // tr, cs: the level is on the line already
             }
             return why;
         } catch (Throwable t) { return ""; }
@@ -156,7 +171,7 @@ public final class S23Watts {
             for (int j = i + 1; j < n; j++)
                 if (Integer.parseInt(iout[j]) < cap) {
                     int at = Integer.parseInt(soc[j - 1]), now = Integer.parseInt(read("capacity"));
-                    return at > now && at < 100 ? (tr() ? trAt(at) + " düşer" : "drops at " + at + "%") : "";
+                    return at > now && at < 100 ? (tr() ? trAt(at) + " düşer" : cs() ? "při " + at + " % klesá" : "drops at " + at + "%") : "";
                 }
         } catch (Throwable ignored) { }
         return "";
