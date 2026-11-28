@@ -114,8 +114,8 @@ galaxyai galaxyai-S918WVLU8GZIF.tar.gz 5619aaee7580b985df300dcfca1fadc56bc774f60
 settingssearch settingssearch-S918WVLU8GZIF.tar.gz bddfa32a08def256b7497730a0e7faecf7b1621655ce0cc85bec423843357042
 callscreen callscreen-S918WVLU8GZIF.tar.partaa 6a8d141557050e738b3a805d741463aae46b9322732bdd3039d836c0d116af9a
 callscreen callscreen-S918WVLU8GZIF.tar.partab 3335ea84794746040513e4297175736d792a19f378187d7b970c4058bc421025
-chargewatts:adcea3e330bb75ab20c8a3602d5a3a65 chargewatts-S918WVLU8GZIF-2.tar.gz a4ad417abdebf610d91c3447ce464c2276b59c0127d82efdb3dc7842542f10ac
-chargewatts:fbd2cd7e81ccce52bf1f4720f973ddb7 chargewatts-S918BXXUAGZIF.tar.gz 6a6e69a380026ecca0e4c22bef1d80720c0db439546844900ed7f91326048ee3"
+chargewatts:adcea3e330bb75ab20c8a3602d5a3a65 chargewatts-S918WVLU8GZIF-3.tar.gz 18d7864b6f0bd4d668750a29e584a7d7329d4c684c6fbaab93ca201fddcf562d
+chargewatts:fbd2cd7e81ccce52bf1f4720f973ddb7 chargewatts-S918BXXUAGZIF-2.tar.gz 68ff3a89e3170e5b104a69df4989bafb3b9c8736f7a74411861fad89df42ac51"
 SETTINGS=/system/priv-app/SecSettings/SecSettings.apk
 # colortone: firmware, md5 of its SecSettings.apk, md5 with files/SecSettings-ead-<firmware>.patch applied
 # (tools/eadpatch.py makes the patch and prints both for another firmware's APK)
@@ -2287,11 +2287,13 @@ SYSUI=/system_ext/priv-app/SystemUI/SystemUI.apk
 AOD_PKG=com.samsung.android.app.aodservice
 # aod rows cover both the built-in AODService_v80 and any Galaxy Store update of the app (whichever is the
 # active apk); each tail in the payload is named AOD-<patched md5>.tail so several can live side by side.
-CW_ROWS="systemui adcea3e330bb75ab20c8a3602d5a3a65 9bc0cf1d101f349005cb972315db1267 62025728 S918WVLU8GZIF
-aod 8765be536661cd4f6f8c2e29a6006766 de46b4836ac3bd896f180401b4f7c528 52326400 8.9.65.90
-aod ea75116a19018c6cb95a0701f506522c f807822d4e954a132ff1ac86fc58ba31 40398848 8.9.67.3
-systemui fbd2cd7e81ccce52bf1f4720f973ddb7 278897720fab3434c5578b8d93c544cf 95891456 S918BXXUAGZIF
-aod cb572b0e9e3fcdfd7416af8a116ff4cb 0972156655e77111216404c4cb20752e 52326400 8.9.65.90"
+# A Store update is the same file on every model, so its tail goes into every model's payload (v1.8.14 left it
+# out of the S918B's, #56).
+CW_ROWS="systemui adcea3e330bb75ab20c8a3602d5a3a65 862403fe30111e6378fa5fddfd4362c0 62025728 S918WVLU8GZIF
+aod 8765be536661cd4f6f8c2e29a6006766 14ec2d7ad07d512b3ca1b3248bacb85e 52326400 8.9.65.90
+aod ea75116a19018c6cb95a0701f506522c c0d942e70df503d911a58a61db9ed203 40398848 8.9.67.3
+systemui fbd2cd7e81ccce52bf1f4720f973ddb7 5c72e31d1075b721fa97acc35c629db1 95891456 S918BXXUAGZIF
+aod cb572b0e9e3fcdfd7416af8a116ff4cb ed5dca2e3f3799f3bb0d5a5c2d2b97f0 52326400 8.9.65.90"
 AOD_SYS=/system/priv-app/AODService_v80/AODService_v80.apk
 aod_apk() { pm path $AOD_PKG 2>/dev/null | sed -n 's/^package://p' | head -n 1; }
 cw_rowof() { m=$(md5 "$2"); echo "$CW_ROWS" | awk -v k=$1 -v m="$m" '$1 == k && ($2 == m || $3 == m)'; }   # cw_rowof <kind> <apk>

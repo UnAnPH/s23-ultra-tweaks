@@ -1,7 +1,9 @@
 # Changelog
 
-## Unreleased
+## v1.8.15
 
+- **Fix: `chargewatts` showed nothing on the Always On Display of an S918B with the Galaxy Store's AOD 8.9.67.3** (#56). The Store update is the same file on every model, and v1.8.14 matched it on the S918B but only packed its patch into the S918W's download, so the log said `AOD-…: download missing` and only the lock screen and notification got the watts. The S918B's download now carries it too (`chargewatts-S918BXXUAGZIF-2.tar.gz`; the S918W's is `-3`).
+- **`chargewatts` in Turkish** (#56): with the phone set to Turkish, the added words are Turkish too: *telefon sıcak*, *yavaşlıyor*, *%80'de düşer* (the suffix follows the number), *25 W şarj cihazı*, and so on. The rest of the line was already Samsung's own translation. Other languages still get English.
 - **Fix: AirDrop never showed up because Play services ignored the Nearby flags** (#22). Play services 26.45 also keeps flag snapshots in a newer store (`app_phenotype_shared/<hash>/<hash>.pb`, flag names hashed). When it has a Nearby snapshot there, it reads that instead of the patched `files/phenotype/shared/com.google.android.gms.nearby.pb`, so all three overrides read false in-process (checked with a log-only Xposed hook on `khta.bd()`/`khsx.L()`) and the external provider registry never starts. The apply now moves that file aside (`.s23off`, first copy backed up to `backup/nearby-newstore.pb`) before restarting Play services, and the test/report's *Nearby flags* line says when it's back. Seen on an S918B, S918BXXUAGZIF, Play services 26.45.31.
 - **Fix: Mosey crashed on start under KernelSU Next** ("Quick Share keeps stopping"). Its `kernel_umount` strips module mounts from apps without root, so Mosey's process saw the empty `MoseyApp.apk` placeholder (`Failed to find magic`). The apply turns off *Umount modules* in Mosey's app profile only (`ksud profile set`); other apps keep the default.
 

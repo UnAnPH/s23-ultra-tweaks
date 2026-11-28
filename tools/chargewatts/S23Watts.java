@@ -79,14 +79,41 @@ public final class S23Watts {
         catch (Throwable t) { return vote(votes, "IV", "VOTER_DC_MODE") > 0; }
     }
 
+    /** Turkish (#56); other languages get English. The rest of the line is Samsung's, already translated. */
+    private static boolean tr() { return "tr".equals(Locale.getDefault().getLanguage()); }
+
+    private static String t(String en) {
+        if (!tr()) return en;
+        switch (en) {
+            case "phone warm": return "telefon sıcak";
+            case "phone in use": return "telefon kullanımda";
+            case "battery temperature": return "pil sıcaklığı";
+            case "charger chip warm": return "şarj yongası sıcak";
+            case "tapering": return "yavaşlıyor";
+            case "battery protection": return "pil koruması";
+            case "25 W charger": return "25 W şarj cihazı";
+            case "15 W charger": return "15 W şarj cihazı";
+            case "slow charger": return "yavaş şarj cihazı";
+            default: return en;
+        }
+    }
+
+    /** Turkish locative after a number, by vowel harmony and the last spoken word: %80'de, %45'te, %59'da */
+    private static String trAt(int n) {
+        String[] ones = {"", "de", "de", "te", "te", "te", "da", "de", "de", "da"};   // bir iki üç dört beş altı yedi sekiz dokuz
+        String[] tens = {"", "da", "de", "da", "ta", "de", "ta", "te", "de", "da"};   // on yirmi otuz kırk elli altmış yetmiş seksen doksan
+        String s = n % 10 != 0 ? ones[n % 10] : (n % 100 != 0 ? tens[(n / 10) % 10] : "de");   // yüz
+        return "%" + n + "'" + s;
+    }
+
     private static String label(String v) {
         switch (v) {
-            case "VOTER_LRP_TEMP": return "phone warm";
-            case "VOTER_SIOP": return "phone in use";
-            case "VOTER_SWELLING": return "battery temperature";
-            case "VOTER_CHG_TEMP": case "VOTER_DCHG_TEMP": case "VOTER_DC_TEMP": return "charger chip warm";
-            case "VOTER_STEP": case "VOTER_DC_STEP_CHARGE": case "VOTER_AGING_STEP": case "VOTER_FULL_CHARGE": return "tapering";
-            case "VOTER_CHG_LIMIT": case "VOTER_SLEEP_MODE": case "VOTER_USER": case "VOTER_SLATE": case "VOTER_SMART_SLATE": return "battery protection";
+            case "VOTER_LRP_TEMP": return t("phone warm");
+            case "VOTER_SIOP": return t("phone in use");
+            case "VOTER_SWELLING": return t("battery temperature");
+            case "VOTER_CHG_TEMP": case "VOTER_DCHG_TEMP": case "VOTER_DC_TEMP": return t("charger chip warm");
+            case "VOTER_STEP": case "VOTER_DC_STEP_CHARGE": case "VOTER_AGING_STEP": case "VOTER_FULL_CHARGE": return t("tapering");
+            case "VOTER_CHG_LIMIT": case "VOTER_SLEEP_MODE": case "VOTER_USER": case "VOTER_SLATE": case "VOTER_SMART_SLATE": return t("battery protection");
             // VOTER_CABLE carries the charger type's current and, while direct charging, the step's: shown as the max
             case "": case "None": case "INIT": case "VOTER_CABLE": case "VOTER_SELECT_PDO": case "VOTER_DC_MODE": return "";
             default: return v.replace("VOTER_", "").replace('_', ' ').toLowerCase(Locale.ROOT);
@@ -104,7 +131,7 @@ public final class S23Watts {
                 int mv = (int) (Long.parseLong(read("voltage_now")) / 1000);
                 int dc = dc(votes) ? value(votes, "DCFV") : -1;
                 int fv = dc > 0 ? dc : value(votes, "FV");
-                if (fv > 0 && mv >= fv - 100) why = "tapering at " + read("capacity") + "%";
+                if (fv > 0 && mv >= fv - 100) why = tr() ? t("tapering") : "tapering at " + read("capacity") + "%";   // tr: the level is on the line already
             }
             return why;
         } catch (Throwable t) { return ""; }
@@ -114,7 +141,7 @@ public final class S23Watts {
     private static String charger() {
         try {   // 4 = 45 W (Super fast charging 2.0), 3 = 25 W, 1-2 = 15/20 W, 0 = normal
             int hv = Integer.parseInt(read("hv_charger_status"));
-            return hv == 3 ? "25 W charger" : hv == 1 || hv == 2 ? "15 W charger" : hv == 0 ? "slow charger" : "";
+            return t(hv == 3 ? "25 W charger" : hv == 1 || hv == 2 ? "15 W charger" : hv == 0 ? "slow charger" : "");
         } catch (Throwable t) { return ""; }
     }
 
@@ -129,7 +156,7 @@ public final class S23Watts {
             for (int j = i + 1; j < n; j++)
                 if (Integer.parseInt(iout[j]) < cap) {
                     int at = Integer.parseInt(soc[j - 1]), now = Integer.parseInt(read("capacity"));
-                    return at > now && at < 100 ? "drops at " + at + "%" : "";
+                    return at > now && at < 100 ? (tr() ? trAt(at) + " düşer" : "drops at " + at + "%") : "";
                 }
         } catch (Throwable ignored) { }
         return "";

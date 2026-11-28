@@ -42,7 +42,7 @@ for SD in $(echo "$K" | while IFS= read -r f; do echo "$W/at/$(echo "${f#"$W"/at
   java -Xmx6g -cp "$APKTOOL:$W/asm" Asm "$SD" "$W/classes$N.dex" 29
   DEX="$DEX classes$N.dex=$W/classes$N.dex"
 done
-javac --release 11 -cp "$AJ" -d "$W/cls" "$W/src/S23Watts.java"
+javac -encoding UTF-8 --release 11 -cp "$AJ" -d "$W/cls" "$W/src/S23Watts.java"
 mkdir -p "$W/helper"; "$D8" --release --min-api 30 --lib "$AJ" --output "$W/helper" "$W/cls/$PKG/S23Watts.class"
 last=$(unzip -Z1 "$APK" 'classes*.dex' | sed 's/classes\([0-9]*\)\.dex/\1/' | sed 's/^$/1/' | sort -n | tail -n 1)
 H=classes$((last + 1)).dex; NAME=$([ $KIND = aod ] && echo AOD || echo SystemUI)
